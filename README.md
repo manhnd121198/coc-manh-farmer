@@ -1,180 +1,171 @@
-# 🤖 Clash of Clans Auto Farmer Bot
+# 🤖 CoC Mạnh Farmer
+
+Bot tự động farm **Clash of Clans** chạy trên máy tính Windows. Bot chụp màn hình thiết bị Android qua ADB, dùng OpenCV và EasyOCR để nhận diện giao diện, sau đó mô phỏng thao tác chạm/vuốt để tìm trận và triển khai quân.
 
 <div align="center">
-  <a href="README.md">🇺🇸 English</a> | <a href="README_AR.md">🇸🇦 العربية</a>
+  <img src="https://img.shields.io/badge/Giấy%20phép-MIT-gold.svg?style=for-the-badge" alt="Giấy phép MIT" />
+  <img src="https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue.svg?style=for-the-badge&logo=python" alt="Python" />
+  <img src="https://img.shields.io/badge/Giao%20diện-PyQt5-darkgreen.svg?style=for-the-badge&logo=qt" alt="PyQt5" />
+  <img src="https://img.shields.io/badge/Thị%20giác-OpenCV%20%7C%20EasyOCR-orange.svg?style=for-the-badge&logo=opencv" alt="OpenCV và EasyOCR" />
+  <img src="https://img.shields.io/badge/Nền%20tảng-Windows-blue.svg?style=for-the-badge&logo=windows" alt="Windows" />
 </div>
-
-<br />
-
-<div align="center">
-  <img src="https://img.shields.io/badge/License-MIT-gold.svg?style=for-the-badge" alt="License" />
-  <img src="https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue.svg?style=for-the-badge&logo=python" alt="Python Version" />
-  <img src="https://img.shields.io/badge/UI-PyQt5-darkgreen.svg?style=for-the-badge&logo=qt" alt="GUI Framework" />
-  <img src="https://img.shields.io/badge/CV-OpenCV%20%7C%20EasyOCR-orange.svg?style=for-the-badge&logo=opencv" alt="Computer Vision" />
-  <img src="https://img.shields.io/badge/Platform-Windows-blue.svg?style=for-the-badge&logo=windows" alt="Platform Support" />
-  <img src="https://img.shields.io/badge/Devices-Tablets%20%7C%20Phones%20%7C%20Emulators-purple.svg?style=for-the-badge" alt="Device Support" />
-</div>
-
-<br />
-
-An advanced, non-intrusive auto-farming bot for **Clash of Clans**. Powered by a universal **Dynamic Multi-Device Computer Vision Engine** (OpenCV scale-variance template matching) and OCR (EasyOCR). It operates 100% safely via Android Debug Bridge (ADB) screenshot analysis and touch emulations, letting the game play itself to collect resources, train armies, and execute strategic attacks on **any device size, tablet (4:3 / 16:10), smartphone (16:9 / 20:9), or PC emulator** without modifying game files or injecting code.
-
----
 
 > [!WARNING]
-> **EDUCATIONAL & FAIR PLAY DISCLAIMER**
-> This repository is a technical demonstration of PyQt5, OpenCV, and accessibility automation. It does **not** read game process memory, manipulate network packets, or modify game files. All actions are simulated at the OS level. However, using automated tools in online multiplayer games violates the publisher's Terms of Service and can result in account suspension. Use this framework responsibly and at your own risk.
+> Dự án phục vụ mục đích học tập và nghiên cứu tự động hóa giao diện. Bot không sửa APK, không đọc bộ nhớ game và không can thiệp gói tin mạng. Tuy nhiên, sử dụng bot trong trò chơi trực tuyến có thể vi phạm Điều khoản dịch vụ của Supercell và khiến tài khoản bị khóa. Bạn tự chịu trách nhiệm khi sử dụng.
 
----
+## Tính năng
 
-## 🎮 What is this Bot? (For Players)
+- Tự nhận độ phân giải (`wm size`) và mật độ màn hình (`wm density`).
+- Hỗ trợ điện thoại, máy tính bảng và các emulator như LDPlayer hoặc BlueStacks.
+- Dùng OCR để đọc Gold, Elixir và Dark Elixir; tự bỏ qua làng không đạt ngưỡng tài nguyên.
+- Nhận diện nút, quân, hero, spell và công trình bằng template matching.
+- Tự tìm trận, triển khai quân, kích hoạt kỹ năng hero và thả spell.
+- Hỗ trợ Home Village và Builder Base nhiều giai đoạn.
+- Tự phát hiện mất kết nối, popup bất thường và trạng thái bị kẹt.
+- Có các profile hiệu năng `Ultra`, `High`, `Medium`, `Low` và `Smart Default`.
+- Cho phép chỉnh cấu hình chiến thuật bằng JSON và hot reload khi bot đang chạy.
 
-Tired of spending hours grinding for Gold, Elixir, and Dark Elixir? This bot acts as your **virtual gameplay assistant**, running on your computer and playing the game on an Android device or emulator exactly like a human player.
+## Các chiến thuật
 
-### 🌟 Key Player Features
-- **📱 Universal Multi-Device Support:** Auto-detects device resolution (`wm size`) and screen density (`wm density`). Adapts dynamically to tablets (iPad 4:3, Galaxy Tab 16:10), modern smartphones, and emulators (LDPlayer 9, BlueStacks 5) without fixed resolution bounds.
-- **🖼️ Universal Single-Template Matching:** One set of template images works across all devices, screen sizes, and custom sceneries (Dark Scenery, Snow Scenery, Jungle Scenery). No need to re-capture templates for different screens.
-- **⚡ 5 Performance Profiles & Smart Default:** Features 4 preset profiles (`Ultra`, `High`, `Medium`, `Low`) + 1 `Smart Adaptive Default Profile` linked to **Reset to Default**. Auto-tunes CPU tick rates, OCR workers, and vision confidence thresholds for weak laptops up to 4K gaming rigs.
-- **🛡️ Low-Spec Hardware Optimization:** Includes safe CPU/GPU fallback for EasyOCR and exception-wrapped OpenCV operations to guarantee zero crashes on low-end dual-core laptops.
-- **🛡️ Level-Invariant Troop Recognition:** Combines Sobel gradient edge maps with inner center-face crops so troop icons match reliably regardless of level upgrades, stars, or frame changes.
-- **Auto-Farming & Loot Filtering:** Scans bases using OCR to read available gold and elixir. If loot is below your minimum settings, it automatically skips the base and searches for a richer target.
-- **Smart Deployment & Strategic Attacks:** Drops troops, heroes, and spells based on real combat logic (avoids red zones, creates paths, and targets specific defenses).
-- **Auto-Training:** Detects when troops are missing and opens the training screen to queue up predefined armies.
-- **Hero Abilities Management:** Monitors heroes and activates their special abilities after a customizable delay or when health drops.
-- **Multi-Stage Builder Base (BB) Automation:** Searches for matches in the Builder Base, drops heroes and troops, activates abilities, and transitions automatically to Stage 2.
-- **Anti-Stuck & Auto-Reload:** Automatically detects connection drops, clicks "Reload", and handles unexpected popups to keep running 24/7.
+| Chiến thuật | Cách hoạt động |
+| --- | --- |
+| **Perimeter Sweep** | Vuốt nhanh quanh bốn cạnh an toàn của map. Mỗi loại quân có điểm bắt đầu và chiều chạy được chọn ngẫu nhiên. |
+| **Resource Raid** | Thăm dò và thả quân gần các kho tài nguyên. |
+| **Ground Funnel** | Tạo hai cánh funnel rồi triển khai đội hình chính vào trung tâm. |
+| **Air Attack** | Rải quân bay theo hình quạt trên hành lang an toàn. |
+| **Town Hall Snipe** | Tìm Town Hall và triển khai tại điểm an toàn gần mục tiêu. |
+| **Smart Default** | Chọn hành lang rộng nhất và triển khai đội hình hỗn hợp. |
 
----
+### Perimeter Sweep
 
-## ⚔️ Combat Efficiency & Army Composition
+Chiến thuật được bổ sung trong repository này:
 
-> [!IMPORTANT]
-> ### 🎯 Attack Success Rate (CSR Performance)
-> The bot's smart vision engine achieves an **80% success rate (8 out of 10 matches)**. Margin of error is minimized through dynamic red-zone contour detection and adaptive corridor planning.
+1. Nhận diện vùng cấm thả quân và bốn hành lang an toàn quanh base.
+2. Tạo một đường khép kín gồm nhiều đoạn vuốt quanh map.
+3. Với mỗi loại quân, chọn ngẫu nhiên điểm bắt đầu và chiều thuận/ngược.
+4. Thêm jitter vào tọa độ, tốc độ và thời gian nghỉ để thao tác không lặp lại tuyệt đối.
+5. Nếu không nhận diện đủ bốn cạnh an toàn, bot tự chuyển sang `Smart Default`.
 
-### 🏹 Optimized Army Composition (TH Universal Link)
-This composition has been extensively benchmarked and works across **all Town Hall levels**.
+Thông số nằm trong `config/v2_attack_rules.json`:
 
-| 📱 Direct Army Copy Link |
-| :--- |
-| [🚀 Click Here to Copy This Army Layout Directly Into Your Game!](https://link.clashofclans.com/en?action=CopyArmy&army=h0p1e10_14-1p3e17_20-2m1p8e24_4-4p4e6_40i11x5-1x52-1x91d1x16u8x5-10x59-1x62-1x87-1x75s5x5-3x2) |
+```json
+"perimeter_sweep": {
+  "clearance_px": 30,
+  "min_corridor_width_px": 16,
+  "points_per_side": 3,
+  "swipe_duration_ms": 280
+}
+```
 
----
-
-## ⚔️ Available Attack Strategies
-
-The bot features a **Config-Skills-Rules (CSR)** combat system that analyzes your army composition and targets to choose the best strategy.
-
-| Attack Rule | Targeted Army Type | How it Works (Combat Mechanics) |
-| :--- | :--- | :--- |
-| **Resource Raid (Storage Farm)** | Cheap units (Barbarians, Goblins, Archers) | Scouts the base by dropping individual troops on storages to trigger traps, then unloads the main wave on the closest safe spot to grab loot. |
-| **Ground Funneling** | Tanky + DPS units (Giants/Golems + Wizards/P.E.K.K.As) | Drops tanks and support units on the left/right margins to clear outer buildings, creating a "funnel" that forces your main force into the center. |
-| **Air Fan (Electro Dragon/Dragons)** | Air units (Dragons, E-Dragons, Balloons) | Deploys air units in a wide line along the safest corridor. Casts Rage and Freeze spells on Air Defenses, Inferno Towers, or Eagle Artilleries. |
-| **Town Hall Snipe** | Any balanced army | Scans the playfield for the Town Hall. If placed near outer edges, the bot deploys units along the closest safe path to secure a quick star. |
-| **Smart Default** | Mixed / Unknown armies | Calculates the widest safe corridor outside red zone boundaries and unloads all troops, heroes, and spells in an organized wave. |
-
----
-
-## 🛠️ System Architecture
+## Kiến trúc
 
 ```mermaid
-graph TD
-    UI[PyQt5 Control Dashboard] -->|Loads/Saves Configs| Settings[Settings Singleton]
-    UI -->|Controls Execution| Engine[QThread Bot Engine]
-    Engine -->|Polls State| StateMachine[State Machine]
-    Engine -->|Calls Actions| ADB[ADB Handler]
-    ADB -->|Queries Dimensions| Resolution[Dynamic Device Adapter]
-    ADB -->|Runs Commands| Exec["2adb.exe (Subprocess)"]
-    Exec -->|Touches / Captures| Device[Android Device / Tablet / Emulator]
-    Device -->|Raw Framebuffer| ADB
-    ADB -->|Screencap Array| ScreenReader[Multi-Scale Vision Engine]
-    ScreenReader -->|Detects Templates| Templates[Template Manager]
-    ScreenReader -->|Extracts Numbers| OCR[EasyOCR Reader]
-    Engine -->|Invokes Decisions| Logic[Home Village / Builder Base Logic]
-    Logic -->|Decides Tactics| CSR[V2 Orchestrator - CSR Rules]
-    CSR -->|Coordinates Moves| Engine
+flowchart TD
+    UI["Giao diện PyQt5"] --> Engine["Bot Engine / QThread"]
+    Engine --> State["State Machine"]
+    Engine --> ADB["ADB Handler"]
+    ADB --> Device["Điện thoại / máy tính bảng / emulator"]
+    Device -->|Ảnh chụp màn hình| Vision["OpenCV + EasyOCR"]
+    Vision --> Logic["Logic Home Village / Builder Base"]
+    Logic --> CSR["V2 Orchestrator + Rules"]
+    CSR -->|Chạm và vuốt| ADB
 ```
 
----
+## Yêu cầu
 
-## 📂 Project Directory Breakdown
+- Windows 10 hoặc Windows 11.
+- Python 3.10 hoặc 3.11.
+- Thiết bị Android hoặc emulator đã bật USB/Wireless Debugging.
+- ADB nhận diện được thiết bị.
+- Khuyến nghị thử trên tài khoản phụ, không dùng tài khoản có giá trị.
 
-```directory
-.
-├── 2adb.exe                      # Portable Android Debug Bridge (ADB) executable
-├── AdbWinApi.dll                 # ADB communication helper library
-├── AdbWinUsbApi.dll              # ADB USB driver interface library
-├── main.py                       # App entry point (PyQt5 runner, log initialiser)
-├── requirements.txt              # Complete Python dependency list
-├── config/                       # Hot-reloadable V2 JSON configuration folder
-│   ├── v2_attack_rules.json      # Global thresholds (standoff bounds, HSV filters)
-│   ├── v2_spell_profiles.json    # Casting trajectories and triggers for spells
-│   └── v2_troop_profiles.json    # Combat behavior specifications for troops
-├── core/                         # Core execution & OS-level bridge
-│   ├── adb_gestures.py           # Multi-touch simulation (zooming, camera panning)
-│   ├── adb_handler.py            # Resolution auto-query, frame grabs, macro recorder
-│   ├── bot_engine.py             # QThread scheduler driving the bot tick loop
-│   ├── logger.py                 # File and console logger setup
-│   ├── settings.py               # 5-Profile registry loading/saving settings.json
-│   └── state_machine.py          # Finite State Machine tracking game phases
-├── logic/                        # High-level gameplay decision rules
-│   ├── builder_base.py           # Builder base dual-stage attack routines
-│   ├── home_village.py           # Main village farming routines
-│   ├── smart_v2_logic.py         # Coordinator proxy for CSR engine & V36 fallbacks
-│   ├── v2_orchestrator.py        # Hot-reload JSON loader & CSR rule selector
-│   └── rules/                    # Strategy algorithms
-├── profiles/                     # User Profiles & Preset Configurations
-├── ui/                           # Graphical Interface Components (PyQt5)
-└── vision/                       # Computer Vision & Image Segmentation
-    ├── ocr_reader.py             # EasyOCR text reader with CPU/GPU safety
-    ├── screen_reader.py          # Multi-scale template matcher & Level-invariant filter
-    ├── smart_vision_v2.py        # Tablet-adaptive Red-zone contour detector
-    └── template_manager.py       # Manifest parser caching template assets
-```
+## Cài đặt
 
----
+### 1. Clone repository
 
-## ⚡ Performance Profiles System
-
-The bot features 5 performance profiles engineered for all hardware configurations:
-
-| Profile | Target Hardware / Devices | Characteristics |
-| :--- | :--- | :--- |
-| ⚡ **Ultra** | High-end PCs with Dedicated NVIDIA GPUs (4K / 2K) | Maximum speed, 0.5s ticks, 4 OCR workers, high precision thresholds. |
-| 🔥 **High** | Gaming Laptops & Mid-High PCs | Fast & reliable, 0.8s ticks, 2 OCR workers, 0.65 UI threshold. |
-| 💻 **Medium** | Standard Desktop CPUs without Dedicated GPU | Balanced CPU usage, 1.0s ticks, 2 OCR workers, 0.58 UI threshold. |
-| 🐢 **Low** | Low-End Laptops & Dual-Core CPUs | Ultra-lightweight, 1.5s ticks, 1 OCR worker, CPU fallback. |
-| 🤖 **Smart Default** | All Devices (Tablets, Smartphones, Emulators) | **Auto-detects CPU & Screen Aspect Ratio**. Linked to **Reset to Default**. |
-
----
-
-## 🚀 Step-by-Step Installation Guide
-
-### Step 1: Clone the Project
 ```powershell
-git clone https://github.com/alisakkaf/Clash-of-Clans-Bot-Auto-Farmer.git
-cd Clash-of-Clans-Bot-Auto-Farmer
+git clone https://github.com/manhnd121198/coc-manh-farmer.git
+cd coc-manh-farmer
 ```
 
-### Step 2: Set Up Python Virtual Environment
+### 2. Tạo môi trường Python
+
 ```powershell
 python -m venv venv
 venv\Scripts\activate
 ```
 
-### Step 3: Install Dependencies
+### 3. Cài thư viện
+
 ```powershell
-pip install --upgrade pip
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Step 4: Verify Connection
+EasyOCR có thể tải model trong lần chạy đầu tiên, vì vậy máy cần kết nối Internet.
+
+### 4. Kết nối thiết bị
+
 ```powershell
 .\2adb.exe devices
 ```
 
----
+Thiết bị phải xuất hiện với trạng thái `device`. Nếu hiện `unauthorized`, mở khóa điện thoại và chấp nhận yêu cầu cấp quyền gỡ lỗi.
 
-## 📜 License
+### 5. Khởi chạy
 
-This project is licensed under the **MIT License** - see the [LICENSE](file:///LICENSE) file for details.
+```powershell
+python main.py
+```
+
+## Dùng Perimeter Sweep
+
+1. Mở tab **Home Village**.
+2. Chọn quân, hero và spell muốn sử dụng.
+3. Bật **Enable V2 (Red-Zone-Aware Smart Deploy)**.
+4. Trong **V2 Rule**, chọn **Perimeter Sweep — random-start swipes around map**.
+5. Kiểm tra game đang mở và thiết bị đã kết nối ADB.
+6. Bắt đầu bot và theo dõi vài trận đầu để hiệu chỉnh cấu hình.
+
+Các thông số nên điều chỉnh:
+
+- `points_per_side`: số điểm trên mỗi cạnh; tăng giá trị sẽ tạo nhiều đoạn vuốt hơn.
+- `swipe_duration_ms`: thời gian của mỗi đoạn vuốt. Vuốt quá chậm có thể bị game hiểu là kéo camera.
+- `clearance_px`: khoảng cách với đường biên đỏ.
+- `tap_jitter_px`: độ lệch ngẫu nhiên của tọa độ thao tác.
+
+## Cấu trúc thư mục
+
+```text
+.
+├── main.py                    # Điểm khởi chạy ứng dụng
+├── requirements.txt           # Thư viện Python
+├── config/                    # Cấu hình CSR, quân và spell
+├── core/                      # ADB, engine, state machine và logging
+├── logic/
+│   ├── rules/                 # Các chiến thuật tấn công
+│   └── skills/                # Planner và thao tác điều khiển
+├── vision/                    # OpenCV, OCR và nhận diện vùng an toàn
+├── ui/                        # Giao diện PyQt5
+├── assets/templates/          # Ảnh mẫu dùng để nhận diện
+├── profiles/                  # Profile người dùng
+├── recordings/                # Macro đã ghi
+└── tests/                     # Unit test
+```
+
+## Chạy kiểm thử
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+## Lưu ý an toàn
+
+- Repository có kèm `2adb.exe` và các DLL dành cho Windows. Nếu cần độ tin cậy cao hơn, hãy thay chúng bằng ADB từ [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools).
+- Không chạy file hoặc cấu hình tải từ nguồn không tin cậy.
+- Không chia sẻ log, profile hoặc ảnh chụp có chứa thông tin tài khoản.
+- Không có cơ chế nào bảo đảm bot tránh được phát hiện hoặc tránh khóa tài khoản.
+
+## Giấy phép
+
+Dự án được phát hành theo giấy phép [MIT](LICENSE). Xem thêm cảnh báo tại [DISCLAIMER.md](DISCLAIMER.md).
