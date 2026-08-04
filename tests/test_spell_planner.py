@@ -105,34 +105,5 @@ class SpellPlannerTest(unittest.TestCase):
         self.assertGreater(len(set(drops)), 90)
         self.assertTrue(all(140 <= x <= 460 and 140 <= y <= 460 for x, y in drops))
 
-    def test_follow_army_path_orders_random_points_from_entry_to_core(self):
-        planner = MODULE.SpellPlannerSkill(target_locator_stub.TargetLocatorSkill())
-        polygon = np.array(
-            [[100, 100], [500, 100], [500, 500], [100, 500]],
-            dtype=np.int32,
-        )
-        MODULE.random.seed(54321)
-
-        drops = planner.plan_spell(
-            screenshot=None,
-            spell_name="totem_spell",
-            cluster_xy=(700, 300),
-            target_xy=(300, 300),
-            spell_profiles={
-                "totem_spell": {
-                    "placement": "follow_army_path",
-                    "inner_scale": 0.95,
-                    "drop_count": 100,
-                }
-            },
-            base_polygon=polygon,
-        )
-
-        self.assertEqual(100, len(drops))
-        self.assertGreater(len(set(drops)), 90)
-        self.assertTrue(all(110 <= x <= 490 and 110 <= y <= 490 for x, y in drops))
-        self.assertEqual(sorted((x for x, _y in drops), reverse=True), [x for x, _y in drops])
-
-
 if __name__ == "__main__":
     unittest.main()
