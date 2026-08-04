@@ -101,6 +101,10 @@ class AirAttackRule(AttackRule):
                 break
             card = skills.target.find_one(ss, troop)
             if card is None:
+                log.warning(
+                    "AirAttack: troop '%s' card not visible — skipped; refresh its template.",
+                    troop,
+                )
                 continue
             skills.touch.tap(card[0], card[1], cfg)
             skills.touch.pre_select_settle(cfg)
@@ -212,15 +216,15 @@ class AirAttackRule(AttackRule):
                 ss, spell, cluster, target, cfg, ctx.spell_profiles,
             ) or [self._default_spell_drop(cluster, target)]
 
-            log.info("Spell '%s': %d drop(s) %s", spell, len(drops), drops)
+            log.info("Spell '%s': selecting once, then %d drop(s) %s", spell, len(drops), drops)
+            skills.touch.tap(card_x, card_y, cfg)
+            skills.touch.pre_select_settle(cfg)
             for (sx, sy) in drops:
                 if self._interrupted(ctx):
                     return
-                # Card-tap → tight 100 ms gap → drop-tap. No extra
-                # settles between spells: the tap()'s built-in settle
-                # already supplies a humanized 150–400 ms gap.
-                skills.touch.tap(card_x, card_y, cfg)
-                time.sleep(0.10)
+                # CoC keeps the same troop/spell card selected while its
+                # quantity remains. Re-tapping the card before every drop
+                # can lose selection when the bar animates or shifts.
                 skills.touch.tap(sx, sy, cfg)
 
         # One final settle so the engine post-deploy stamp is clean.
