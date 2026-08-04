@@ -11,9 +11,9 @@ BuilderBaseLogic call when the V2 toggle is on. The new flow:
        error) we fall through to the LEGACY V36 path preserved below.
 
 Legacy V36 path (``_legacy_attack_smart`` / ``_legacy_attack_building``
-/ ``_legacy_attack_storage``) is the proven single-cluster long-press
-dump pattern. We keep it untouched as ultimate fallback so the bot is
-NEVER worse than V36 even if the new CSR pipeline misbehaves.
+/ ``_legacy_attack_storage``) remains the ultimate fallback when the CSR
+planner cannot build a polygon. Its deploy actuator uses tap-only troop
+drops and honors configured spell counts just like the primary V2 path.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from typing import Literal
 
 import numpy as np
 
-from core.adb_handler import screencap, tap, swipe
+from core.adb_handler import screencap, tap, tap_raw
 from core.adb_gestures import pinch_zoom_out, pan_camera
 from core.logger import BotLogger
 from core.settings import Settings
@@ -221,30 +221,28 @@ class SmartV2Logic:
         cluster_xy: tuple[int, int],
         side: str,
     ) -> None:
-        """Legacy V36 single-cluster dump pattern — proven to work.
+        """Legacy V36 fallback using tap-only troop/spell deployment.
 
         Mechanics (intentionally identical to ``HomeVillageLogic.
         _execute_full_attack``):
-          1. TROOPS  — for each card, tap to select then issue TWO long
-             ``swipe`` calls of duration ``swipe_duration`` ms staying at
-             the cluster point (±10 px). CoC reads this as a tap-and-hold
-             dump and unloads ALL housed troops there.
+          1. TROOPS  — select each card once, then tap repeatedly around
+             the cluster. No hold/swipe gestures are used.
           2. HEROES  — tap card → single tap at cluster (±15 px jitter).
           3. WAIT    — ``hero_ability_delay`` seconds before triggering
              hero abilities, so the heroes are ALIVE on screen.
           4. ABILITY — double-tap each hero's CARD slot in the bottom bar.
-          5. SPELLS  — for each card, tap to select then drop along seven
-             ``spread_depths`` from the cluster toward the enemy core.
+          5. SPELLS  — select each card once, then honor its configured
+             ``drop_count`` while cycling points toward the enemy core.
 
         V2's contribution is choosing ``cluster_xy`` intelligently (red-
         zone aware safe edge in smart mode; closest-safe to a building or
         storage in those modes). The DEPLOY MECHANICS are unchanged from
-        legacy because the legacy mechanics are the only ones that work
-        reliably across emulators.
+        fallback, but its deploy mechanics match the tap-only V2 rules.
         """
         s = Settings()
-        swipe_dur = int(s.get("swipe_duration", 2500))
         ability_delay = float(s.get("hero_ability_delay", 3.0))
+        troop_profiles = self._orchestrator.troop_profiles()
+        spell_profiles = self._orchestrator.spell_profiles()
 
         cluster_x, cluster_y = cluster_xy
         h, w = screenshot.shape[:2]
@@ -263,28 +261,32 @@ class SmartV2Logic:
         _ss = screencap()
         fresh = _ss if _ss is not None else screenshot
 
-        # ── STEP 1: TROOPS (long-press dump at cluster) ─────────────
+        # ── STEP 1: TROOPS (tap-only around cluster) ────────────────
         selected_troops = self._profile.get(self._key("selected_troops"), [])
         for troop_name in selected_troops:
             if self._interrupted():
                 return
             tloc = self._sr.find_template_by_name(fresh, troop_name)
             if tloc is None:
+                log.warning("V2 fallback: troop '%s' card not visible — skipped.", troop_name)
                 continue
-            tap(tloc[0], tloc[1])
+            tap_raw(tloc[0], tloc[1])
             time.sleep(0.20)
-            log.info("V2 dump %s @ cluster (%d,%d) side=%s",
-                     troop_name, cluster_x, cluster_y, side)
-            # Two micro-offset long-presses at the SAME cluster point.
-            # ±10 px is too small to register as a drag (CoC threshold is
-            # >30 px), too big to be a duplicate-tap suppression. The long
-            # duration is what dumps the entire slot.
-            swipe(cluster_x, cluster_y,
-                  cluster_x + 10, cluster_y + 10, duration_ms=swipe_dur)
-            time.sleep(0.20)
-            swipe(cluster_x, cluster_y,
-                  cluster_x - 10, cluster_y - 10,
-                  duration_ms=int(swipe_dur * 0.8))
+            troop_cfg = troop_profiles.get(troop_name, {})
+            deploy_taps = max(1, int(troop_cfg.get("deploy_taps", 9)))
+            stagger = max(0, int(troop_cfg.get("stagger_ms", 120))) / 1000.0
+            log.info(
+                "V2 fallback tap-deploy %s: %d taps @ cluster (%d,%d) side=%s",
+                troop_name, deploy_taps, cluster_x, cluster_y, side,
+            )
+            for _ in range(deploy_taps):
+                if self._interrupted():
+                    return
+                tap_raw(
+                    cluster_x + random.randint(-30, 30),
+                    cluster_y + random.randint(-30, 30),
+                )
+                time.sleep(stagger)
 
         # ── STEP 2: HEROES (tap card → tap cluster) ──────────────────
         hero_memory: list[tuple[str, int, int]] = []
@@ -320,27 +322,36 @@ class SmartV2Logic:
         _ss = screencap()
         spell_ss = _ss if _ss is not None else fresh
         selected_spells = self._profile.get(self._key("selected_spells"), [])
-        # Same spread_depths as legacy V36 — known to land spells on top
-        # of the army's pushing column without bunching them up.
         spread_depths = [0.55, 0.75, 0.95, 1.10, 0.85, 0.95, 1.00]
         for spell_name in selected_spells:
             if self._interrupted():
                 return
             sloc = self._sr.find_template_by_name(spell_ss, spell_name)
             if sloc is None:
+                log.warning("V2 fallback: spell '%s' card not visible — skipped.", spell_name)
                 continue
-            tap(sloc[0], sloc[1])
+            spell_cfg = spell_profiles.get(spell_name, {})
+            drop_count = max(1, int(spell_cfg.get("drop_count", len(spread_depths))))
+            log.info(
+                "V2 fallback spell '%s': selecting once, then %d drop(s)",
+                spell_name, drop_count,
+            )
+            tap_raw(sloc[0], sloc[1])
             time.sleep(0.20)
-            for depth in spread_depths:
+            for index in range(drop_count):
                 if self._interrupted():
                     return
+                depth = spread_depths[index % len(spread_depths)]
                 sx = int(cluster_x + (true_core_x - cluster_x) * depth)
                 sy = int(cluster_y + (true_core_y - cluster_y) * depth)
                 sx = max(10, min(sx, w - 10))
                 sy = max(100, min(sy, ui_cutoff - 20))
-                tap(sx + random.randint(-20, 20),
-                    sy + random.randint(-20, 20))
-                time.sleep(0.15)
+                drop_x = max(10, min(sx + random.randint(-20, 20), w - 10))
+                drop_y = max(100, min(
+                    sy + random.randint(-20, 20), ui_cutoff - 20,
+                ))
+                tap_raw(drop_x, drop_y)
+                time.sleep(0.12)
 
         # Stamp deploy time on the engine (so retreat-after-deploy works).
         if self._engine is not None:
