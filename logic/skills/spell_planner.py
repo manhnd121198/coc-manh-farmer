@@ -15,6 +15,7 @@ Behaviour by placement:
     "on_target" → on the closest match of target_priority assets.
     "on_wall"   → middle of the cluster→target line (jump/earthquake).
     "inside_base_random" → random points safely inside the enemy polygon.
+    "follow_army_path" → random interior points ordered from entry to core.
 """
 
 from __future__ import annotations
@@ -98,6 +99,17 @@ class SpellPlannerSkill:
             if not out:
                 out.append(self._on_path(cluster_xy, target_xy, 0.80))
 
+        elif placement == "follow_army_path":
+            inner_scale = float(profile.get("inner_scale", 0.95))
+            out.extend(self._random_inside_base(
+                base_polygon, target_xy, drop_count, inner_scale,
+            ))
+            out.sort(key=lambda point: self._path_progress(
+                point, cluster_xy, target_xy,
+            ))
+            if not out:
+                out.append(self._on_path(cluster_xy, target_xy, 0.80))
+
         else:
             out.append(self._on_path(cluster_xy, target_xy, 0.55))
 
@@ -134,6 +146,21 @@ class SpellPlannerSkill:
                     break
 
         return points
+
+    @staticmethod
+    def _path_progress(
+        point: tuple[int, int],
+        cluster_xy: tuple[int, int],
+        target_xy: tuple[int, int],
+    ) -> float:
+        px, py = point
+        cx, cy = cluster_xy
+        tx, ty = target_xy
+        dx, dy = tx - cx, ty - cy
+        length_sq = dx * dx + dy * dy
+        if length_sq <= 0:
+            return float((px - cx) ** 2 + (py - cy) ** 2)
+        return ((px - cx) * dx + (py - cy) * dy) / float(length_sq)
 
     @staticmethod
     def _on_path(

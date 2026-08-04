@@ -212,8 +212,8 @@ class AirAttackRule(AttackRule):
         cluster: tuple[int, int],
         target: tuple[int, int],
     ) -> None:
-        """Drop EVERY selected spell in a single tight burst, smartly
-        ahead of the army's launch line.
+        """Drop every selected spell using its configured placement and
+        optional wave schedule.
 
         Robustness rules:
             • Refresh the screenshot first — the spell bar's page may
@@ -258,19 +258,48 @@ class AirAttackRule(AttackRule):
                 ss, spell, cluster, target, cfg, ctx.spell_profiles, ctx.polygon,
             ) or [self._default_spell_drop(cluster, target)]
 
+            spell_profile = ctx.spell_profiles.get(spell, {}) or {}
+            drops_per_wave = max(1, int(spell_profile.get("drops_per_wave", len(drops))))
+            wave_interval_sec = max(0.0, float(spell_profile.get("wave_interval_sec", 0.0)))
+            drop_interval_sec = max(0.0, float(spell_profile.get("drop_interval_ms", 0))) / 1000.0
+
             log.info("Spell '%s': selecting once, then %d drop(s) %s", spell, len(drops), drops)
             skills.touch.tap(card_x, card_y, cfg)
             skills.touch.pre_select_settle(cfg)
-            for (sx, sy) in drops:
+            schedule_started_at = time.monotonic()
+            for index, (sx, sy) in enumerate(drops):
                 if self._interrupted(ctx):
                     return
+                wave_index = index // drops_per_wave
+                if index % drops_per_wave == 0:
+                    deadline = schedule_started_at + wave_index * wave_interval_sec
+                    if not self._wait_until(ctx, deadline):
+                        return
+                    log.info(
+                        "Spell '%s': wave %d, drops %d-%d",
+                        spell,
+                        wave_index + 1,
+                        index + 1,
+                        min(index + drops_per_wave, len(drops)),
+                    )
                 # CoC keeps the same troop/spell card selected while its
                 # quantity remains. Re-tapping the card before every drop
                 # can lose selection when the bar animates or shifts.
                 skills.touch.tap(sx, sy, cfg)
+                if drop_interval_sec > 0 and index + 1 < len(drops):
+                    time.sleep(drop_interval_sec)
 
         # One final settle so the engine post-deploy stamp is clean.
         skills.touch.post_deploy_settle(cfg)
+
+    def _wait_until(self, ctx: AttackContext, deadline: float) -> bool:
+        while True:
+            if self._interrupted(ctx):
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return True
+            time.sleep(min(0.25, remaining))
 
     @staticmethod
     def _default_spell_drop(

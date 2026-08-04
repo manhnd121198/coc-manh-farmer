@@ -94,6 +94,51 @@ class SpellDeploymentTest(unittest.TestCase):
         self.assertEqual(drops, touch.taps[1:])
         self.assertEqual(101, len(touch.taps))
 
+    def test_totem_drops_in_five_waves_over_first_90_seconds(self):
+        clock = [0.0]
+
+        class _TimedTouch(_Touch):
+            def __init__(self):
+                super().__init__()
+                self.drop_times = []
+
+            def tap(self, x, y, config):
+                super().tap(x, y, config)
+                if y == 300:
+                    self.drop_times.append(clock[0])
+
+        touch = _TimedTouch()
+        drops = [(200 + index, 300) for index in range(100)]
+        target = types.SimpleNamespace(
+            expand_prefix=lambda _spell: ["totem_spell"],
+            find_first_of=lambda _ss, _candidates: ("totem_spell", 800, 950),
+        )
+        spell = types.SimpleNamespace(plan_spell=lambda *_args: drops)
+        ctx = types.SimpleNamespace(
+            profile={"selected_spells": ["totem_spell"]},
+            screenshot=object(),
+            config={},
+            spell_profiles={
+                "totem_spell": {
+                    "drops_per_wave": 20,
+                    "wave_interval_sec": 18,
+                    "drop_interval_ms": 0,
+                }
+            },
+            polygon=None,
+            skills=types.SimpleNamespace(target=target, spell=spell, touch=touch),
+        )
+
+        def advance(seconds):
+            clock[0] += seconds
+
+        with patch.object(MODULE.time, "monotonic", side_effect=lambda: clock[0]), \
+             patch.object(MODULE.time, "sleep", side_effect=advance):
+            MODULE.AirAttackRule()._deploy_spells(ctx, (100, 100), (500, 500))
+
+        wave_starts = [touch.drop_times[index] for index in (0, 20, 40, 60, 80)]
+        self.assertEqual([0.0, 18.0, 36.0, 54.0, 72.0], wave_starts)
+
     @patch.object(MODULE.time, "sleep", return_value=None)
     def test_dragon_cycles_fan_until_configured_deploy_taps(self, _sleep):
         touch = _Touch()
