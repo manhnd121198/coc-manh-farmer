@@ -130,7 +130,6 @@ _DEFAULTS: dict = {
     "v2_target_bb":       "",
     "v2_zoom_out_steps":  2,
     "v2_decoration_wait": 5.0,
-    "v2_show_briefing":   True,
     "v2_rule_hv":         "auto",
     "v2_rule_bb":         "auto",
 

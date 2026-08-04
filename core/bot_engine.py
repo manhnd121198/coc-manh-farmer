@@ -58,7 +58,6 @@ class BotEngine(QThread):
     bot_stopped        = pyqtSignal()
     help_needed        = pyqtSignal(object, str)     # (screenshot, reason)
     game_not_installed = pyqtSignal(str)             # package name
-    briefing_needed    = pyqtSignal(str)             # multi-line message
 
     def __init__(self, profile: dict, mode: str = "home_village") -> None:
         super().__init__()

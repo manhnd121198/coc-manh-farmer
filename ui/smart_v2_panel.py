@@ -7,7 +7,7 @@ UI surface for the CSR (Config + Skills + Rules) attack system:
   • Rule selector (auto / smart_default / perimeter / air / ground / raid / snipe).
   • NEW: Reload Config button (hot-reload JSON files in config/).
   • NEW: Active rule indicator (shows what the orchestrator picked).
-  • Zoom-out steps + decoration wait + briefing toggle.
+  • Zoom-out steps + decoration wait.
   • Target picker synced with the Asset Manager.
 """
 
@@ -131,14 +131,6 @@ class SmartV2Panel(QGroupBox):
         zoom_row.addWidget(self._spin_wait)
         zoom_row.addStretch()
 
-        self._chk_brief = QCheckBox("Show pre-attack briefing dialog")
-        self._chk_brief.setToolTip(
-            "Pop a one-page English briefing the first time a Building\n"
-            "or Storage attack is launched, so you know what army to\n"
-            "bring before the bot starts dropping.",
-        )
-        self._chk_brief.stateChanged.connect(self._emit)
-
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setFrameShadow(QFrame.Sunken)
@@ -167,7 +159,6 @@ class SmartV2Panel(QGroupBox):
 
         root.addLayout(form)
         root.addLayout(zoom_row)
-        root.addWidget(self._chk_brief)
         root.addWidget(sep)
         root.addLayout(cfg_row)
 
@@ -197,8 +188,7 @@ class SmartV2Panel(QGroupBox):
 
     def _load(self) -> None:
         for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_zoom, self._spin_wait,
-                  self._chk_brief):
+                  self._combo_rule, self._spin_zoom, self._spin_wait):
             w.blockSignals(True)
 
         self._chk_enable.setChecked(bool(self._s.get(self._key("v2_enabled"), False)))
@@ -216,11 +206,9 @@ class SmartV2Panel(QGroupBox):
 
         self._spin_zoom.setValue(int(self._s.get("v2_zoom_out_steps", 2)))
         self._spin_wait.setValue(float(self._s.get("v2_decoration_wait", 5.0)))
-        self._chk_brief.setChecked(bool(self._s.get("v2_show_briefing", True)))
 
         for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_zoom, self._spin_wait,
-                  self._chk_brief):
+                  self._combo_rule, self._spin_zoom, self._spin_wait):
             w.blockSignals(False)
 
         self._on_mode_changed()
@@ -232,7 +220,6 @@ class SmartV2Panel(QGroupBox):
         self._s.set(self._key("v2_rule"),     self._combo_rule.currentData() or "auto")
         self._s.set("v2_zoom_out_steps",      self._spin_zoom.value())
         self._s.set("v2_decoration_wait",     self._spin_wait.value())
-        self._s.set("v2_show_briefing",       self._chk_brief.isChecked())
         self._s.save()
 
     def _on_mode_changed(self) -> None:

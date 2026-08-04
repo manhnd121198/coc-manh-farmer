@@ -69,10 +69,6 @@ class SmartV2Logic:
         mode: Mode = str(s.get(f"v2_mode_{self._mode_key}", "smart"))  # type: ignore[assignment]
         target = str(s.get(f"v2_target_{self._mode_key}", ""))
 
-        if self._mode_key == "hv" and self._should_brief(mode) and self._engine is not None:
-            self._engine.briefing_needed.emit(self._briefing_text(mode, target))
-            time.sleep(0.4)
-
         try:
             success = self._orchestrator.execute(
                 screenshot=screenshot,
@@ -440,29 +436,3 @@ class SmartV2Logic:
             return False
         return (not getattr(self._engine, "_running", False)) or getattr(self._engine, "_paused", False)
 
-    def _should_brief(self, mode: Mode) -> bool:
-        return bool(Settings().get("v2_show_briefing", True)) and mode in ("building", "storage")
-
-    @staticmethod
-    def _briefing_text(mode: Mode, target: str) -> str:
-        if mode == "storage":
-            return (
-                f"Smart Vision V2 — STORAGE MODE\n\n"
-                f"Target prefix:  {target or '<none>'}\n\n"
-                "The bot will scout each storage with ONE troop to reveal\n"
-                "its exact location, then dump the rest of the army on the\n"
-                "closest safe spot. Recommended army composition:\n"
-                "  • A cheap fodder troop FIRST in the deployment list\n"
-                "    (Barbarian / Goblin) — used as the scout.\n"
-                "  • Main wave behind it (Giants, Wizards, Heroes, …).\n\n"
-                "Spells are paired left + right of the army path."
-            )
-        if mode == "building":
-            return (
-                f"Smart Vision V2 — BUILDING MODE\n\n"
-                f"Target:  {target or '<none>'}\n\n"
-                "The bot will drop the army on the closest SAFE tile next\n"
-                "to the target — never directly on top of it. Spells are\n"
-                "paired left + right of the army's path."
-            )
-        return ""

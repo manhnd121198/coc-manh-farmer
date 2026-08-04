@@ -267,7 +267,6 @@ class MainWindow(QMainWindow):
         self._engine.bot_stopped.connect(self._on_bot_stopped)
         self._engine.help_needed.connect(self._on_help_needed)
         self._engine.game_not_installed.connect(self._on_game_not_installed)
-        self._engine.briefing_needed.connect(self._on_briefing_needed)
 
         # start_bot() returns False if the game package is missing on the
         # connected device — keep the UI in stopped state in that case.
@@ -361,10 +360,6 @@ class MainWindow(QMainWindow):
 
     def _on_error(self, msg: str) -> None:
         self.statusBar().showMessage(f"Error: {msg}")
-
-    def _on_briefing_needed(self, message: str) -> None:
-        """Pre-attack V2 briefing — informs the user about army requirements."""
-        QMessageBox.information(self, "Smart Vision V2 — Briefing", message)
 
     def _on_game_not_installed(self, package: str) -> None:
         """Critical: the configured game package is not installed on the device."""
