@@ -15,6 +15,10 @@ class _AttackRule:
         return list(ctx.profile.get("selected_spells", []))
 
     @staticmethod
+    def _selected_heroes(ctx):
+        return list(ctx.profile.get("selected_heroes", []))
+
+    @staticmethod
     def _interrupted(_ctx):
         return False
 
@@ -115,6 +119,64 @@ class SpellDeploymentTest(unittest.TestCase):
         self.assertEqual((300, 950), touch.taps[0])
         self.assertEqual(50, len(touch.taps[1:]))
         self.assertEqual(fan_points * 16 + fan_points[:2], touch.taps[1:])
+
+    def test_hero_jitter_inside_red_zone_falls_back_to_safe_cluster(self):
+        touch = _Touch()
+        polygon = [(0, 0), (1, 0), (1, 1)]
+        red_zone = types.SimpleNamespace(
+            is_inside=lambda _polygon, x, _y, margin=0: x + margin >= 500,
+        )
+        hero = types.SimpleNamespace(
+            plan_drops=lambda _cluster, _cards: [
+                ("queen", (300, 950), (510, 400)),
+            ],
+        )
+        target = types.SimpleNamespace(find_one=lambda _ss, _hero: (300, 950))
+        ctx = types.SimpleNamespace(
+            screenshot=object(),
+            profile={"selected_heroes": ["queen"]},
+            mode_key="hv",
+            config={},
+            polygon=polygon,
+            skills=types.SimpleNamespace(
+                red_zone=red_zone,
+                hero=hero,
+                target=target,
+                touch=touch,
+            ),
+        )
+
+        memory = MODULE.AirAttackRule()._deploy_heroes(ctx, (400, 400), [])
+
+        self.assertEqual([(300, 950), (400, 400)], touch.taps)
+        self.assertEqual((400, 400), memory[0][2])
+
+    @patch.object(MODULE.time, "sleep", return_value=None)
+    def test_air_troop_tap_inside_red_zone_is_skipped(self, _sleep):
+        touch = _Touch()
+        red_zone = types.SimpleNamespace(
+            is_inside=lambda _polygon, x, _y, margin=0: x + margin >= 500,
+        )
+        target = types.SimpleNamespace(find_one=lambda _ss, _troop: (300, 950))
+        ctx = types.SimpleNamespace(
+            screenshot=object(),
+            config={},
+            polygon=[(0, 0), (1, 0), (1, 1)],
+            troop_profiles={
+                "dragon": {"style": "fan", "stagger_ms": 0, "deploy_taps": 2},
+            },
+            skills=types.SimpleNamespace(
+                red_zone=red_zone,
+                target=target,
+                touch=touch,
+            ),
+        )
+
+        MODULE.AirAttackRule()._deploy_air_troops(
+            ctx, ["dragon"], [(400, 200), (510, 200)], (400, 200),
+        )
+
+        self.assertEqual([(300, 950), (400, 200)], touch.taps)
 
 
 if __name__ == "__main__":

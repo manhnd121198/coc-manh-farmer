@@ -43,10 +43,17 @@ class AirAttackRule(AttackRule):
         validated: list[tuple[int, int]] = []
         for (px, py) in fan_points:
             ok = skills.obstacle.find_nearest_deployable(ss, px, py, cfg)
-            if ok is not None:
+            if ok is not None and self._is_safe_deploy_point(ctx, ok):
                 validated.append(ok)
+            elif self._is_safe_deploy_point(ctx, (px, py)):
+                log.warning(
+                    "AirAttack: obstacle correction entered red zone; keeping original point (%d,%d).",
+                    px, py,
+                )
+                validated.append((px, py))
         if not validated:
-            validated = fan_points
+            log.warning("AirAttack: no troop point safely outside the red zone.")
+            return False
 
         cluster = validated[len(validated) // 2]
         target = ctx.base_centroid or SafeCorridorSkill.center(rect)
@@ -119,6 +126,12 @@ class AirAttackRule(AttackRule):
                     if self._interrupted(ctx):
                         break
                     px, py = fan_points[index % len(fan_points)]
+                    if not self._is_safe_deploy_point(ctx, (px, py)):
+                        log.warning(
+                            "AirAttack: skipped troop tap inside red zone at (%d,%d).",
+                            px, py,
+                        )
+                        continue
                     skills.touch.tap(px, py, cfg)
                     time.sleep(stagger_ms / 1000.0)
             skills.touch.post_deploy_settle(cfg)
@@ -143,12 +156,38 @@ class AirAttackRule(AttackRule):
         for (name, card_xy, drop_xy) in plans:
             if self._interrupted(ctx):
                 break
+            if not self._is_safe_deploy_point(ctx, drop_xy):
+                if not self._is_safe_deploy_point(ctx, cluster):
+                    log.warning(
+                        "AirAttack: hero '%s' has no point safely outside red zone — skipped.",
+                        name,
+                    )
+                    continue
+                log.warning(
+                    "AirAttack: hero '%s' jitter entered red zone; using cluster (%d,%d).",
+                    name, cluster[0], cluster[1],
+                )
+                drop_xy = cluster
             skills.touch.tap(card_xy[0], card_xy[1], cfg)
             skills.touch.pre_select_settle(cfg)
             skills.touch.tap(drop_xy[0], drop_xy[1], cfg)
             skills.touch.post_deploy_settle(cfg)
             hero_memory.append((name, card_xy, drop_xy))
         return hero_memory
+
+    @staticmethod
+    def _is_safe_deploy_point(
+        ctx: AttackContext,
+        point: tuple[int, int],
+        margin_px: int = 25,
+    ) -> bool:
+        polygon = getattr(ctx, "polygon", None)
+        if polygon is None or len(polygon) < 3:
+            return True
+        x, y = point
+        return not ctx.skills.red_zone.is_inside(
+            polygon, int(x), int(y), margin=margin_px,
+        )
 
     def _wait_for_engagement(self, ctx: AttackContext) -> None:
         delay = ctx.skills.hero.ability_delay_seconds(ctx.config)
