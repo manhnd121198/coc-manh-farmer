@@ -25,7 +25,12 @@ from __future__ import annotations
 import random
 import time
 
-from core.adb_handler import _run as _adb_run, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT
+from core.adb_handler import (
+    _run as _adb_run,
+    tap_raw as _adb_tap,
+    DEFAULT_SCREEN_WIDTH,
+    DEFAULT_SCREEN_HEIGHT,
+)
 from core.logger import BotLogger
 
 log = BotLogger.get("v2.human_touch")
@@ -37,10 +42,8 @@ class HumanTouchSkill:
     def tap(self, x: int, y: int, config: dict | None = None) -> None:
         cfg = self._cfg(config)
         hx, hy = self._jitter(x, y, cfg["tap_jitter_px"])
-        hold = random.randint(cfg["tap_hold_min_ms"], cfg["tap_hold_max_ms"])
-        log.debug("v2.tap (%d,%d)→(%d,%d) hold=%dms", x, y, hx, hy, hold)
-        _adb_run(["shell", "input", "swipe",
-                  str(hx), str(hy), str(hx), str(hy), str(hold)])
+        log.debug("v2.tap (%d,%d)→(%d,%d)", x, y, hx, hy)
+        _adb_tap(hx, hy)
         self.settle(config)
 
     def long_press(
