@@ -54,11 +54,12 @@ Y_CLAMP_MIN = 120
 CLAMP_PAD = 40
 
 
-def _get_troops_bar_height() -> int | None:
+def _get_troops_bar_size() -> tuple[int, int] | None:
+    """(width, height) of the captured troops-bar template, or None."""
     manifest = _load_manifest()
     entry = manifest.get("troops_bar")
-    if entry and entry.get("height"):
-        return int(entry["height"])
+    if entry and entry.get("width") and entry.get("height"):
+        return int(entry["width"]), int(entry["height"])
     return None
 
 
@@ -68,11 +69,13 @@ class ScreenReader:
     @staticmethod
     def get_ui_cutoff(screen_height: int) -> int:
         from core.adb_handler import is_tablet_device, get_aspect_ratio
-        bar_h = _get_troops_bar_height()
+        bar = _get_troops_bar_size()
         aspect = get_aspect_ratio()
 
-        if bar_h is not None and bar_h > 0:
-            cutoff = screen_height - bar_h
+        if bar is not None and bar[0] > 0 and bar[1] > 0:
+            cutoff = screen_height - ScreenReader._scaled_bar_height(
+                bar, screen_height, aspect,
+            )
         else:
             if is_tablet_device():
                 ratio = 0.70
@@ -83,6 +86,26 @@ class ScreenReader:
             cutoff = int(screen_height * ratio)
 
         return max(int(screen_height * 0.35), min(cutoff, int(screen_height * 0.88)))
+
+    @staticmethod
+    def _scaled_bar_height(
+        bar: tuple[int, int], screen_height: int, aspect: float,
+    ) -> int:
+        """Troops-bar height in CURRENT screen pixels.
+
+        The stored height is in the pixels of whatever screen the template
+        was captured on. Using it raw eats into the playfield on any
+        narrower screen — a 418px bar captured at 2400 wide is really
+        344px at 1920, and those missing 74 rows clip the bottom of the
+        base, which then fails the polygon aspect-ratio sanity check.
+
+        The bar spans the screen width in CoC, so the ratio between the
+        captured bar width and the current screen width IS the UI scale.
+        """
+        bar_w, bar_h = bar
+        screen_width = screen_height * max(0.1, aspect)
+        scale = screen_width / float(bar_w)
+        return max(1, int(round(bar_h * scale)))
 
     @staticmethod
     def _detect_red_mask(screenshot: np.ndarray, ui_cutoff: int) -> np.ndarray:
