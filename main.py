@@ -13,6 +13,9 @@ import os
 # Ensure project root is on the path so relative imports work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# PyTorch 2.9 on Windows must load its DLLs before PyQt initializes.
+import torch  # noqa: F401
+
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QFont
 
