@@ -89,6 +89,32 @@ class SpellDeploymentTest(unittest.TestCase):
         self.assertEqual(drops, touch.taps[1:])
         self.assertEqual(101, len(touch.taps))
 
+    @patch.object(MODULE.time, "sleep", return_value=None)
+    def test_dragon_cycles_fan_until_configured_deploy_taps(self, _sleep):
+        touch = _Touch()
+        target = types.SimpleNamespace(find_one=lambda _ss, _troop: (300, 950))
+        ctx = types.SimpleNamespace(
+            screenshot=object(),
+            config={},
+            troop_profiles={
+                "dragon": {
+                    "style": "fan",
+                    "stagger_ms": 0,
+                    "deploy_taps": 50,
+                }
+            },
+            skills=types.SimpleNamespace(target=target, touch=touch),
+        )
+        fan_points = [(100, 200), (120, 220), (140, 240)]
+
+        MODULE.AirAttackRule()._deploy_air_troops(
+            ctx, ["dragon"], fan_points, fan_points[1],
+        )
+
+        self.assertEqual((300, 950), touch.taps[0])
+        self.assertEqual(50, len(touch.taps[1:]))
+        self.assertEqual(fan_points * 16 + fan_points[:2], touch.taps[1:])
+
 
 if __name__ == "__main__":
     unittest.main()

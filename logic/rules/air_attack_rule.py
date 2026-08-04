@@ -112,10 +112,13 @@ class AirAttackRule(AttackRule):
             if style == "stack":
                 skills.touch.long_press(cluster[0], cluster[1], None, cfg)
             else:
-                stagger_ms = int(ctx.troop_profiles.get(troop, {}).get("stagger_ms", 220))
-                for (px, py) in fan_points:
+                troop_profile = ctx.troop_profiles.get(troop, {})
+                stagger_ms = int(troop_profile.get("stagger_ms", 220))
+                deploy_taps = max(1, int(troop_profile.get("deploy_taps", len(fan_points))))
+                for index in range(deploy_taps):
                     if self._interrupted(ctx):
                         break
+                    px, py = fan_points[index % len(fan_points)]
                     skills.touch.tap(px, py, cfg)
                     time.sleep(stagger_ms / 1000.0)
             skills.touch.post_deploy_settle(cfg)

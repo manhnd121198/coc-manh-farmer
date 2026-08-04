@@ -35,5 +35,7 @@
   "overgrowth_spell":   {"placement": "on_target", "timing": "immediate",
                          "target_priority": ["x_bow", "scattershot"], "drop_count": 1},
   "overgrowth":         {"placement": "on_target", "timing": "immediate",
-                         "target_priority": ["x_bow", "scattershot"], "drop_count": 1}
+                         "target_priority": ["x_bow", "scattershot"], "drop_count": 1},
+  "totem_spell":        {"placement": "on_wall",   "timing": "after_engage",
+                         "path_fraction": 0.80, "drop_count": 100}
 }

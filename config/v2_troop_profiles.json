@@ -1,7 +1,7 @@
 {
   "_comment": "Per-troop deployment style. kind ∈ {air,ground}. style ∈ {fan,stack,funnel,behind_tank,scout_pairs}.",
   "electro_dragon":   {"kind": "air",    "style": "fan",          "drop_first": false, "stagger_ms": 220},
-  "dragon":           {"kind": "air",    "style": "fan",          "drop_first": false, "stagger_ms": 220},
+  "dragon":           {"kind": "air",    "style": "fan",          "drop_first": false, "stagger_ms": 220, "deploy_taps": 50},
   "lava_hound":       {"kind": "air",    "style": "stack",        "drop_first": true,  "stagger_ms": 150},
   "balloon":          {"kind": "air",    "style": "fan",          "drop_first": false, "stagger_ms": 180, "behind_tank": "lava_hound"},
   "minion":           {"kind": "air",    "style": "fan",          "drop_first": false, "stagger_ms": 80},
