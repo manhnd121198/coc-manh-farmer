@@ -216,7 +216,7 @@ class AirAttackRule(AttackRule):
             _, card_x, card_y = hit
 
             drops = skills.spell.plan_spell(
-                ss, spell, cluster, target, cfg, ctx.spell_profiles,
+                ss, spell, cluster, target, cfg, ctx.spell_profiles, ctx.polygon,
             ) or [self._default_spell_drop(cluster, target)]
 
             log.info("Spell '%s': selecting once, then %d drop(s) %s", spell, len(drops), drops)

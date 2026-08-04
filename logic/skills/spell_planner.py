@@ -14,6 +14,7 @@ Behaviour by placement:
     "on_army"   → near cluster (small jitter).
     "on_target" → on the closest match of target_priority assets.
     "on_wall"   → middle of the cluster→target line (jump/earthquake).
+    "inside_base_random" → random points safely inside the enemy polygon.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from core.logger import BotLogger
+from vision.skills.red_zone_polygon import RedZonePolygonSkill
 from vision.skills.target_locator import TargetLocatorSkill
 
 log = BotLogger.get("v2.spell_planner")
@@ -43,6 +45,7 @@ class SpellPlannerSkill:
         target_xy: tuple[int, int],
         config: dict | None = None,
         spell_profiles: dict | None = None,
+        base_polygon: np.ndarray | None = None,
     ) -> List[Tuple[int, int]]:
         cfg = config or {}
         profiles = spell_profiles or {}
@@ -87,10 +90,50 @@ class SpellPlannerSkill:
                 bx, by = base_pt
                 out.append((bx + random.randint(-20, 20), by + random.randint(-20, 20)))
 
+        elif placement == "inside_base_random":
+            inner_scale = float(profile.get("inner_scale", 0.80))
+            out.extend(self._random_inside_base(
+                base_polygon, target_xy, drop_count, inner_scale,
+            ))
+            if not out:
+                out.append(self._on_path(cluster_xy, target_xy, 0.80))
+
         else:
             out.append(self._on_path(cluster_xy, target_xy, 0.55))
 
         return out
+
+    @staticmethod
+    def _random_inside_base(
+        polygon: np.ndarray | None,
+        target_xy: tuple[int, int],
+        count: int,
+        inner_scale: float,
+    ) -> List[Tuple[int, int]]:
+        bbox = RedZonePolygonSkill.bbox(polygon)
+        if bbox is None:
+            return []
+
+        x, y, w, h = bbox
+        center = RedZonePolygonSkill.centroid(polygon) or target_xy
+        cx, cy = center
+        scale = min(1.0, max(0.10, inner_scale))
+        points: List[Tuple[int, int]] = []
+        max_attempts = max(100, count * 50)
+
+        for _ in range(max_attempts):
+            raw_x = random.randint(x, x + w - 1)
+            raw_y = random.randint(y, y + h - 1)
+            if not RedZonePolygonSkill.is_inside(polygon, raw_x, raw_y):
+                continue
+            px = int(round(cx + (raw_x - cx) * scale))
+            py = int(round(cy + (raw_y - cy) * scale))
+            if RedZonePolygonSkill.is_inside(polygon, px, py):
+                points.append((px, py))
+                if len(points) == count:
+                    break
+
+        return points
 
     @staticmethod
     def _on_path(

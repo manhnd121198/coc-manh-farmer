@@ -80,6 +80,7 @@ class SpellDeploymentTest(unittest.TestCase):
             screenshot=object(),
             config={},
             spell_profiles={"totem_spell": {"drop_count": 100}},
+            polygon=None,
             skills=types.SimpleNamespace(target=target, spell=spell, touch=touch),
         )
 
