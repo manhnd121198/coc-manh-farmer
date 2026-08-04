@@ -59,7 +59,11 @@ class SpellPlannerSkill:
             out.append(self._on_path(cluster_xy, target_xy, frac))
 
         elif placement == "on_army":
-            cx, cy = cluster_xy
+            # The deployment cluster is normally outside the base.  Move
+            # toward the target before dropping spells so taps land on the
+            # battlefield instead of the troop deployment edge.
+            frac = float(profile.get("path_fraction", 0.35))
+            cx, cy = self._on_path(cluster_xy, target_xy, frac)
             for _ in range(drop_count):
                 out.append((cx + random.randint(-30, 30), cy + random.randint(-30, 30)))
 
