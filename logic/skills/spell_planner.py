@@ -15,10 +15,12 @@ Behaviour by placement:
     "on_target" → on the closest match of target_priority assets.
     "on_wall"   → middle of the cluster→target line (jump/earthquake).
     "inside_base_random" → random points safely inside the enemy polygon.
+    "inside_base_ring" → scattered points around an interior ring.
 """
 
 from __future__ import annotations
 
+import math
 import random
 from typing import List, Optional, Tuple
 
@@ -98,6 +100,13 @@ class SpellPlannerSkill:
             if not out:
                 out.append(self._on_path(cluster_xy, target_xy, 0.80))
 
+        elif placement == "inside_base_ring":
+            out.extend(self._random_inside_ring(
+                base_polygon, target_xy, drop_count, profile,
+            ))
+            if not out:
+                out.append(self._on_path(cluster_xy, target_xy, 0.80))
+
         else:
             out.append(self._on_path(cluster_xy, target_xy, 0.55))
 
@@ -132,6 +141,70 @@ class SpellPlannerSkill:
                 points.append((px, py))
                 if len(points) == count:
                     break
+
+        return points
+
+    @staticmethod
+    def _random_inside_ring(
+        polygon: np.ndarray | None,
+        target_xy: tuple[int, int],
+        count: int,
+        profile: dict,
+    ) -> List[Tuple[int, int]]:
+        bbox = RedZonePolygonSkill.bbox(polygon)
+        if bbox is None:
+            return []
+
+        _x, _y, w, h = bbox
+        center = RedZonePolygonSkill.centroid(polygon) or target_xy
+        cx, cy = center
+        drops_per_wave = max(1, int(profile.get("drops_per_wave", count)))
+        radius_min = min(0.95, max(0.10, float(profile.get("ring_radius_min", 0.65))))
+        radius_max = min(0.98, max(radius_min, float(profile.get("ring_radius_max", 0.85))))
+        max_ray = math.hypot(w, h)
+        angles: List[float] = []
+        wave_rotation = 0.0
+
+        for index in range(count):
+            wave_slot = index % drops_per_wave
+            if wave_slot == 0:
+                wave_rotation = random.uniform(0.0, 2.0 * math.pi)
+            remaining = count - (index // drops_per_wave) * drops_per_wave
+            slots_in_wave = min(drops_per_wave, remaining)
+            angle_step = 2.0 * math.pi / slots_in_wave
+            angle = (
+                wave_rotation
+                + wave_slot * angle_step
+                + random.uniform(-0.25, 0.25) * angle_step
+            )
+            angles.append(angle)
+
+        boundary_distances: List[float] = []
+        for angle in angles:
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            lo, hi = 0.0, max_ray
+            for _ in range(14):
+                mid = (lo + hi) / 2.0
+                mx = int(round(cx + cos_a * mid))
+                my = int(round(cy + sin_a * mid))
+                if RedZonePolygonSkill.is_inside(polygon, mx, my):
+                    lo = mid
+                else:
+                    hi = mid
+            boundary_distances.append(lo)
+
+        if not boundary_distances:
+            return []
+
+        safe_radius = min(boundary_distances)
+        points: List[Tuple[int, int]] = []
+        for angle in angles:
+            radius = safe_radius * random.uniform(radius_min, radius_max)
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            px = int(round(cx + cos_a * radius))
+            py = int(round(cy + sin_a * radius))
+            if RedZonePolygonSkill.is_inside(polygon, px, py):
+                points.append((px, py))
 
         return points
 

@@ -1,4 +1,5 @@
 import importlib.util
+import math
 import sys
 import types
 import unittest
@@ -104,6 +105,40 @@ class SpellPlannerTest(unittest.TestCase):
         self.assertEqual(100, len(drops))
         self.assertGreater(len(set(drops)), 90)
         self.assertTrue(all(140 <= x <= 460 and 140 <= y <= 460 for x, y in drops))
+
+    def test_inside_base_ring_spreads_every_wave_around_base(self):
+        planner = MODULE.SpellPlannerSkill(target_locator_stub.TargetLocatorSkill())
+        polygon = np.array(
+            [[100, 100], [500, 100], [500, 500], [100, 500]],
+            dtype=np.int32,
+        )
+        MODULE.random.seed(24680)
+
+        drops = planner.plan_spell(
+            screenshot=None,
+            spell_name="totem_spell",
+            cluster_xy=(700, 300),
+            target_xy=(300, 300),
+            spell_profiles={
+                "totem_spell": {
+                    "placement": "inside_base_ring",
+                    "ring_radius_min": 0.65,
+                    "ring_radius_max": 0.85,
+                    "drop_count": 100,
+                    "drops_per_wave": 20,
+                }
+            },
+            base_polygon=polygon,
+        )
+
+        self.assertEqual(100, len(drops))
+        self.assertGreater(len(set(drops)), 90)
+        for wave_start in range(0, 100, 20):
+            wave = drops[wave_start:wave_start + 20]
+            quadrants = {(x >= 300, y >= 300) for x, y in wave}
+            self.assertEqual(4, len(quadrants))
+            self.assertTrue(all(math.hypot(x - 300, y - 300) >= 120 for x, y in wave))
+            self.assertTrue(all(math.hypot(x - 300, y - 300) <= 180 for x, y in wave))
 
 if __name__ == "__main__":
     unittest.main()

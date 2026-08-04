@@ -42,15 +42,14 @@ class AirAttackRule(AttackRule):
 
         validated: list[tuple[int, int]] = []
         for (px, py) in fan_points:
-            ok = skills.obstacle.find_nearest_deployable(ss, px, py, cfg)
-            if ok is not None and self._is_safe_deploy_point(ctx, ok):
+            ok = self._find_safe_deployable(ctx, ss, (px, py), cfg)
+            if ok is not None:
                 validated.append(ok)
-            elif self._is_safe_deploy_point(ctx, (px, py)):
+            else:
                 log.warning(
-                    "AirAttack: obstacle correction entered red zone; keeping original point (%d,%d).",
+                    "AirAttack: no valid terrain outside red zone near (%d,%d) — skipped.",
                     px, py,
                 )
-                validated.append((px, py))
         if not validated:
             log.warning("AirAttack: no troop point safely outside the red zone.")
             return False
@@ -188,6 +187,46 @@ class AirAttackRule(AttackRule):
         return not ctx.skills.red_zone.is_inside(
             polygon, int(x), int(y), margin=margin_px,
         )
+
+    def _find_safe_deployable(
+        self,
+        ctx: AttackContext,
+        screenshot,
+        point: tuple[int, int],
+        config: dict,
+        max_rings: int = 12,
+        step_px: int = 20,
+    ) -> tuple[int, int] | None:
+        x, y = point
+        shape = getattr(screenshot, "shape", None)
+        if shape is not None:
+            screen_h, screen_w = shape[:2]
+            ui_cutoff = int(getattr(ctx, "ui_cutoff", screen_h))
+        else:
+            screen_h = screen_w = ui_cutoff = None
+        offsets = [(0, 0)]
+        for ring in range(1, max_rings + 1):
+            step = ring * step_px
+            offsets.extend([
+                (0, step), (0, -step), (step, 0), (-step, 0),
+                (step, step), (step, -step), (-step, step), (-step, -step),
+            ])
+        for dx, dy in offsets:
+            candidate = (x + dx, y + dy)
+            if screen_w is not None and (
+                candidate[0] < 60
+                or candidate[0] >= screen_w - 60
+                or candidate[1] < 110
+                or candidate[1] >= ui_cutoff - 80
+            ):
+                continue
+            if not self._is_safe_deploy_point(ctx, candidate):
+                continue
+            if ctx.skills.obstacle.is_deployable(
+                screenshot, candidate[0], candidate[1], config,
+            ):
+                return candidate
+        return None
 
     def _wait_for_engagement(self, ctx: AttackContext) -> None:
         delay = ctx.skills.hero.ability_delay_seconds(ctx.config)

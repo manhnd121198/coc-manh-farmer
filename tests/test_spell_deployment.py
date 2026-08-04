@@ -223,6 +223,24 @@ class SpellDeploymentTest(unittest.TestCase):
 
         self.assertEqual([(300, 950), (400, 200)], touch.taps)
 
+    def test_safe_deploy_search_never_falls_back_to_invalid_original(self):
+        red_zone = types.SimpleNamespace(
+            is_inside=lambda _polygon, x, _y, margin=0: x + margin >= 500,
+        )
+        obstacle = types.SimpleNamespace(
+            is_deployable=lambda _ss, x, _y, _cfg: x in (360, 520),
+        )
+        ctx = types.SimpleNamespace(
+            polygon=[(0, 0), (1, 0), (1, 1)],
+            skills=types.SimpleNamespace(red_zone=red_zone, obstacle=obstacle),
+        )
+
+        point = MODULE.AirAttackRule()._find_safe_deployable(
+            ctx, object(), (400, 300), {}, max_rings=3, step_px=20,
+        )
+
+        self.assertEqual((360, 300), point)
+
 
 if __name__ == "__main__":
     unittest.main()
