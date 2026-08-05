@@ -58,6 +58,7 @@ class BotEngine(QThread):
     bot_stopped        = pyqtSignal()
     help_needed        = pyqtSignal(object, str)     # (screenshot, reason)
     game_not_installed = pyqtSignal(str)             # package name
+    stats_changed      = pyqtSignal(int, int)        # (attacks, skips)
 
     def __init__(self, profile: dict, mode: str = "home_village") -> None:
         super().__init__()
@@ -82,6 +83,29 @@ class BotEngine(QThread):
 
         # Game-presence periodic check (timestamps of the last verification).
         self._last_game_check: float = 0.0
+
+        # Session tally — reset on every start_bot(), not on pause/resume.
+        self._attack_count = 0
+        self._skip_count = 0
+
+    # ── Session tally ───────────────────────────────────────────────────
+
+    def record_attack(self) -> None:
+        """One battle entered. Called by the village logic, not the UI."""
+        self._attack_count += 1
+        log.info("SESSION: %d attack(s), %d skip(s).",
+                 self._attack_count, self._skip_count)
+        self.stats_changed.emit(self._attack_count, self._skip_count)
+
+    def record_skip(self) -> None:
+        """One village passed over because its loot was below threshold."""
+        self._skip_count += 1
+        self.stats_changed.emit(self._attack_count, self._skip_count)
+
+    def reset_stats(self) -> None:
+        self._attack_count = 0
+        self._skip_count = 0
+        self.stats_changed.emit(0, 0)
 
     # ── Control ─────────────────────────────────────────────────────────
 
@@ -147,6 +171,7 @@ class BotEngine(QThread):
                         "starting anyway and will keep retrying in the loop.")
 
         self._last_game_check = time.time()
+        self.reset_stats()
         log.info("Starting bot (mode=%s).", self._mode)
         self._running = True
         self.start()

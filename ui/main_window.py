@@ -140,6 +140,17 @@ class MainWindow(QMainWindow):
         self._settings_tab.settings_changed.connect(self._on_settings_changed)
         self._update_preset_pill()
 
+        # Session tally lives on the right of the status bar as a permanent
+        # widget — showMessage() traffic (state, loot, errors) would
+        # otherwise overwrite it every second.
+        self._stats_label = QLabel()
+        self._stats_label.setToolTip(
+            "Battles entered and villages skipped since the last Start.\n"
+            "Resets every time the bot is started, not on pause/resume.",
+        )
+        self.statusBar().addPermanentWidget(self._stats_label)
+        self._on_stats_changed(0, 0)
+
         self.statusBar().showMessage("Ready. Configure settings, sequences, then start.")
 
     # ═══════════════════════════════════════════════════════════════════
@@ -267,6 +278,7 @@ class MainWindow(QMainWindow):
         self._engine.bot_stopped.connect(self._on_bot_stopped)
         self._engine.help_needed.connect(self._on_help_needed)
         self._engine.game_not_installed.connect(self._on_game_not_installed)
+        self._engine.stats_changed.connect(self._on_stats_changed)
 
         # start_bot() returns False if the game package is missing on the
         # connected device — keep the UI in stopped state in that case.
@@ -351,6 +363,9 @@ class MainWindow(QMainWindow):
     # ═══════════════════════════════════════════════════════════════════
     #  Signals
     # ═══════════════════════════════════════════════════════════════════
+
+    def _on_stats_changed(self, attacks: int, skips: int) -> None:
+        self._stats_label.setText(f"⚔  Trận: {attacks}   ⏭  Bỏ qua: {skips}")
 
     def _on_state_changed(self, name: str) -> None:
         self.statusBar().showMessage(f"State: {name}")

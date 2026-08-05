@@ -98,6 +98,9 @@ class BuilderBaseLogic:
 
         # 1. DEPLOYMENT
         if not self._stage_deployed:
+            # Stage 2 is the same battle continued — only tally stage 1.
+            if self._current_stage == 1 and self._engine is not None:
+                self._engine.record_attack()
             log.info("BB Stage %d: Starting Intelligent Deployment...", self._current_stage)
             self._deploy_army(screenshot)
             self._stage_deployed = True

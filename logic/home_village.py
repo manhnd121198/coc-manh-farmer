@@ -58,6 +58,12 @@ class HomeVillageLogic:
         self._profile = profile
         self._v2.update_profile(profile)
 
+    def _count_attack(self) -> None:
+        """Tally one battle. Every path that arms ``_attack_active`` goes
+        through here so Normal, Ranked and loot-skip all count alike."""
+        if self._engine is not None:
+            self._engine.record_attack()
+
     def _is_interrupted(self) -> bool:
         if self._engine is None: return False
         return not self._engine._running or self._engine._paused
@@ -86,6 +92,7 @@ class HomeVillageLogic:
         # Skip loot check if user disabled it
         if _s.get("skip_loot_ocr", False):
             log.info("%s✓ Loot Skip ON%s — attacking without reading!", C_GREEN, C_RESET)
+            self._count_attack()
             self._attack_active = True
             self._battle_phase_done = False
             self._initial_loot = {}
@@ -98,12 +105,15 @@ class HomeVillageLogic:
 
         if gold >= mg or elixir >= me:
             log.info("%s✓ Loot OK%s (G:%d E:%d) — ATTACKING!", C_GREEN, C_RESET, gold, elixir)
+            self._count_attack()
             self._attack_active = True
             self._battle_phase_done = False
             self._initial_loot = loot
             self._execute_full_attack(screenshot)
         else:
             log.info("%s✗ Skip%s (G:%d E:%d)", C_RED, C_RESET, gold, elixir)
+            if self._engine is not None:
+                self._engine.record_skip()
             m = self._sr.find_template_by_name(screenshot, "next_button")
             if m: tap(m[0], m[1])
 
@@ -134,6 +144,7 @@ class HomeVillageLogic:
             except Exception as exc:
                 log.warning("Ranked loot read failed: %s — continuing without it.", exc)
                 self._initial_loot = {}
+        self._count_attack()
         self._attack_active = True
         self._battle_phase_done = False
 
