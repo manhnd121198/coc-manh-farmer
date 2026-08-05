@@ -50,6 +50,7 @@ from logic.skills import (
     HeroPlannerSkill,
     HumanTouchSkill,
     PerimeterPlannerSkill,
+    RingPlannerSkill,
     SpellPlannerSkill,
 )
 from vision.screen_reader import ScreenReader
@@ -261,6 +262,7 @@ class V2Orchestrator:
             spell    = SpellPlannerSkill(target),
             hero     = HeroPlannerSkill(),
             perimeter = PerimeterPlannerSkill(),
+            ring     = RingPlannerSkill(),
         )
 
     def _build_rules(self) -> list[AttackRule]:

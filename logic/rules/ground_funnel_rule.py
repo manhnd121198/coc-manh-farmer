@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import time
 
+from core.adb_handler import screencap
 from logic.rules.air_attack_rule import AirAttackRule
 from logic.rules.base_rule import AttackContext
 from vision.skills.safe_corridor import SafeCorridorSkill
@@ -142,19 +143,22 @@ class GroundFunnelRule(AirAttackRule):
         for troop in main_troops:
             if self._interrupted(ctx):
                 return
+            # Emptied cards leave the bar and shift the rest — re-read it.
+            fresh = screencap()
+            if fresh is not None:
+                ss = fresh
             card = skills.target.find_one(ss, troop)
             if card is None:
                 continue
             skills.touch.tap(card[0], card[1], cfg)
             skills.touch.pre_select_settle(cfg)
             style = ctx.troop_profiles.get(troop, {}).get("style", "fan")
-            if style in ("behind_tank", "stack"):
+            if self._hold_enabled(ctx, troop):
+                self._hold_dump(ctx, troop, [cluster])
+            elif style in ("behind_tank", "stack"):
                 skills.touch.long_press(cluster[0], cluster[1], None, cfg)
             else:
                 stagger_ms = int(ctx.troop_profiles.get(troop, {}).get("stagger_ms", 90))
-                for _ in range(8):
-                    if self._interrupted(ctx):
-                        return
-                    skills.touch.tap(cluster[0], cluster[1], cfg)
-                    time.sleep(stagger_ms / 1000.0)
+                burst_cfg = self._with_burst_gap(cfg, stagger_ms) if stagger_ms > 0 else cfg
+                skills.touch.tap_burst([cluster] * 8, burst_cfg)
             skills.touch.post_deploy_settle(cfg)

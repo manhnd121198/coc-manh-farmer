@@ -298,5 +298,19 @@
     "file": "assets\\templates\\ui_elements\\searching_indicator.png",
     "width": 291,
     "height": 225
+  },
+  "dragon": {
+    "category": "troops",
+    "label": "Dragon",
+    "file": "assets\\templates\\troops\\dragon.png",
+    "width": 108,
+    "height": 118
+  },
+  "minion": {
+    "category": "heroes",
+    "label": "Minion",
+    "file": "assets\\templates\\heroes\\minion.png",
+    "width": 108,
+    "height": 143
   }
 }

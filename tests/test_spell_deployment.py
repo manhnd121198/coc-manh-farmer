@@ -22,6 +22,27 @@ class _AttackRule:
     def _interrupted(_ctx):
         return False
 
+    # Hold-to-dump is exercised in tests/test_hold_dump.py; here the stub
+    # keeps the rules on the tap path unless a test opts in.
+    hold_mode = False
+    hold_calls: list = []
+
+    @classmethod
+    def _hold_enabled(cls, _ctx, _troop):
+        return cls.hold_mode
+
+    @classmethod
+    def _hold_dump(cls, _ctx, troop, points):
+        cls.hold_calls.append((troop, list(points)))
+
+    @staticmethod
+    def _with_burst_gap(config, gap_ms):
+        cfg = dict(config or {})
+        dp = dict(cfg.get("deploy_pattern", {}) or {})
+        dp["tap_burst_gap_ms"] = max(0, int(gap_ms))
+        cfg["deploy_pattern"] = dp
+        return cfg
+
 
 base_rule_stub = types.ModuleType("logic.rules.base_rule")
 base_rule_stub.AttackRule = _AttackRule
@@ -59,9 +80,16 @@ with patch.dict(
 class _Touch:
     def __init__(self):
         self.taps = []
+        self.bursts = []
 
     def tap(self, x, y, _config):
         self.taps.append((x, y))
+
+    def tap_burst(self, points, config=None):
+        # Recorded in `taps` too: a burst IS the deploy taps, just sent
+        # in one ADB call, so the planning assertions stay meaningful.
+        self.bursts.append((list(points), config))
+        self.taps.extend(list(points))
 
     def pre_select_settle(self, _config):
         pass
@@ -164,6 +192,30 @@ class SpellDeploymentTest(unittest.TestCase):
         self.assertEqual((300, 950), touch.taps[0])
         self.assertEqual(50, len(touch.taps[1:]))
         self.assertEqual(fan_points * 16 + fan_points[:2], touch.taps[1:])
+
+    @patch.object(MODULE.time, "sleep", return_value=None)
+    def test_hold_mode_replaces_the_tap_burst(self, _sleep):
+        touch = _Touch()
+        target = types.SimpleNamespace(find_one=lambda _ss, _troop: (300, 950))
+        ctx = types.SimpleNamespace(
+            screenshot=object(),
+            config={},
+            troop_profiles={"dragon": {"style": "fan", "deploy_taps": 50}},
+            skills=types.SimpleNamespace(target=target, touch=touch),
+        )
+        fan_points = [(100, 200), (120, 220), (140, 240)]
+        _AttackRule.hold_mode = True
+        _AttackRule.hold_calls = []
+        try:
+            MODULE.AirAttackRule()._deploy_air_troops(
+                ctx, ["dragon"], fan_points, fan_points[1],
+            )
+        finally:
+            _AttackRule.hold_mode = False
+
+        # Card selected once, then held — no deploy taps at all.
+        self.assertEqual([(300, 950)], touch.taps)
+        self.assertEqual([("dragon", fan_points)], _AttackRule.hold_calls)
 
     def test_hero_jitter_inside_red_zone_falls_back_to_safe_cluster(self):
         touch = _Touch()

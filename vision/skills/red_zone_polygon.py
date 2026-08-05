@@ -142,6 +142,45 @@ class RedZonePolygonSkill:
         max_area = playfield_area * max_area_ratio
         eps = float(cfg.get("approx_eps_px", 2.0))
 
+        # ── Attempt 0: fuse the THIN fragments ───────────────────
+        # The boundary is a 2 px line, so the mask never yields one big
+        # blob — it yields a scatter of thin fragments plus whatever
+        # decorations shared its colour. "Largest contour" then picks a
+        # fire or a lava tile, and the hull collapses onto part of the
+        # base (measured: 22 % of the screen, drops landing on walls).
+        #
+        # Fragments of a line are cheap to tell apart from decorations:
+        # a line fills almost none of its bounding box (~1.4 %), a solid
+        # decoration fills a third of it. Keep the thin ones, union them,
+        # and the outline comes back whole.
+        frag_cfg = cfg.get("boundary_fragments", {}) or {}
+        if frag_cfg.get("enabled", True):
+            min_bbox = float(frag_cfg.get("min_bbox_px", 1500))
+            max_fill = float(frag_cfg.get("max_fill_ratio", 0.18))
+            thin = []
+            for c in contours:
+                _, _, cw, ch = cv2.boundingRect(c)
+                box = float(cw * ch)
+                if box < min_bbox:
+                    continue
+                if cv2.contourArea(c) / box > max_fill:
+                    continue
+                thin.append(c)
+            if len(thin) >= 2:
+                stacked = np.vstack(thin)
+                verts0 = self._verts_from_contour(stacked, eps)
+                if verts0 is not None:
+                    area0 = float(cv2.contourArea(cv2.convexHull(stacked)))
+                    if min_area <= area0 <= max_area and \
+                            self._sanity_ok(verts0, w, ui_cutoff, cfg, mode):
+                        self._log_polygon(mode, verts0, area0,
+                                          f"thin-{len(thin)}")
+                        return verts0
+                    log.debug(
+                        "RedZone (%s) thin-%d: area=%.0f sanity FAIL.",
+                        mode, len(thin), area0,
+                    )
+
         # ── Attempt 1: largest single contour ────────────────────
         best = max(contours, key=cv2.contourArea)
         verts = self._verts_from_contour(best, eps)
@@ -257,19 +296,38 @@ class RedZonePolygonSkill:
     @staticmethod
     def _build_mask(roi: np.ndarray, cfg: dict) -> np.ndarray:
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-        # Stricter saturation (was 100) keeps semi-transparent HUD
-        # overlays out of the mask. The actual perimeter dashes hit
-        # S ≥ 180 reliably across themes.
-        s_min = int(cfg.get("hsv_s_min", 150))
-        v_min = int(cfg.get("hsv_v_min", 110))
-        m_red_low  = cv2.inRange(hsv, np.array([0,   s_min, v_min]), np.array([12,  255, 255]))
+        # Sampled off the real boundary line on device screencaps: it sits
+        # at H 9-11, S 207-217, V 168-193 — a narrow, strongly saturated
+        # red. The previous defaults (S≥150, V≥110, plus an orange 10-24
+        # band and eased pink/magenta bands) were far looser than that and
+        # swallowed the base itself. Measured on one 1920x1080 frame:
+        #
+        #     red 0-12         12,149 px   ← the boundary
+        #     orange 10-24     81,661 px   ← torches, fires, dirt paths
+        #     pink 140-170     12,291 px   ← purple buildings, decorations
+        #     magenta 150-175   7,179 px
+        #
+        # 87 % of the "boundary" was terrain and buildings, so the hull
+        # tracked whatever happened to be warm-coloured that frame — too
+        # wide on one base, 22 % of the screen on the next. The tight
+        # bands below leave ~7k px, which is the line and little else.
+        #
+        # The extra bands stay available for themes that really do render
+        # the perimeter orange or pink; they are opt-in now, not default.
+        s_min = int(cfg.get("hsv_s_min", 190))
+        v_min = int(cfg.get("hsv_v_min", 140))
+        hue_hi = int(cfg.get("hsv_red_hue_hi", 14))
+        m_red_low  = cv2.inRange(hsv, np.array([0,   s_min, v_min]), np.array([hue_hi, 255, 255]))
         m_red_high = cv2.inRange(hsv, np.array([168, s_min, v_min]), np.array([180, 255, 255]))
-        m_orange   = cv2.inRange(hsv, np.array([10,  s_min, v_min]), np.array([24,  255, 255]))
-        # Pink/magenta dashes appear on lava themes. Saturation eased
-        # because pink reads as desaturated red on emulator screencaps.
-        m_pink     = cv2.inRange(hsv, np.array([140, 110, v_min]), np.array([170, 220, 255]))
-        m_magenta  = cv2.inRange(hsv, np.array([150, 130, v_min]), np.array([175, 255, 255]))
-        mask = m_red_low | m_red_high | m_orange | m_pink | m_magenta
+        mask = m_red_low | m_red_high
+
+        if bool(cfg.get("include_orange_band", False)):
+            mask |= cv2.inRange(hsv, np.array([10, s_min, v_min]), np.array([24, 255, 255]))
+        if bool(cfg.get("include_pink_band", False)):
+            # Pink/magenta dashes appear on lava themes. Saturation eased
+            # because pink reads as desaturated red on emulator screencaps.
+            mask |= cv2.inRange(hsv, np.array([140, 110, v_min]), np.array([170, 220, 255]))
+            mask |= cv2.inRange(hsv, np.array([150, 130, v_min]), np.array([175, 255, 255]))
 
         kh = tuple(cfg.get("morph_close_h_kernel", [35, 3]))
         kv = tuple(cfg.get("morph_close_v_kernel", [3, 35]))

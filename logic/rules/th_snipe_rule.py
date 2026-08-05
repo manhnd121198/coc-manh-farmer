@@ -6,6 +6,7 @@ configured target building (typically town_hall_*). Designed for the
 
 from __future__ import annotations
 
+from core.adb_handler import screencap
 from logic.rules.air_attack_rule import AirAttackRule
 from logic.rules.base_rule import AttackContext
 from vision.skills.safe_corridor import SafeCorridorSkill
@@ -50,12 +51,18 @@ class THSnipeRule(AirAttackRule):
             if self._interrupted(ctx):
                 self._stamp_engine_post_deploy(ctx, [])
                 return True
+            fresh = screencap()          # emptied cards shift the bar
+            if fresh is not None:
+                ss = fresh
             card = skills.target.find_one(ss, troop)
             if card is None:
                 continue
             skills.touch.tap(card[0], card[1], cfg)
             skills.touch.pre_select_settle(cfg)
-            skills.touch.long_press(cluster[0], cluster[1], None, cfg)
+            if self._hold_enabled(ctx, troop):
+                self._hold_dump(ctx, troop, [cluster])
+            else:
+                skills.touch.long_press(cluster[0], cluster[1], None, cfg)
             skills.touch.post_deploy_settle(cfg)
 
         hero_memory = self._deploy_heroes(ctx, cluster, [])

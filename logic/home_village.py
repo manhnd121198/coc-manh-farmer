@@ -46,6 +46,12 @@ class HomeVillageLogic:
         self._post_deploy_time: float = 0.0
         self._initial_loot: dict[str, int] = {}
 
+        # Post-deploy countdown, drawn once per battle (see
+        # ``_resolve_deploy_deadline``). Stamp = the deployment this draw
+        # belongs to, so a new battle always gets a new number.
+        self._deploy_timer_stamp: float = 0.0
+        self._deploy_timer_target: int = 0
+
         # Smart Vision V2 — opt-in per-village. Constructed eagerly so the
         # mode flag can flip mid-session without a restart.
         self._v2 = SmartV2Logic(self._profile, self._sr, self._ocr, mode_key="hv")
@@ -275,12 +281,43 @@ class HomeVillageLogic:
                 self._end_battle(screenshot)
                 self._attack_active = False
 
+    def _deploy_timer_window(self) -> tuple[int, int]:
+        """(min, max) seconds for the post-deploy countdown. When
+        ``deploy_timer_seconds_max`` is absent or not above the minimum the
+        timer is a fixed value, exactly as before."""
+        lo = int(self._profile.get("deploy_timer_seconds", 90))
+        hi = int(self._profile.get("deploy_timer_seconds_max", lo))
+        if hi < lo:
+            lo, hi = hi, lo
+        return lo, hi
+
+    def _resolve_deploy_deadline(self) -> int:
+        """Draw the countdown ONCE per battle and keep it.
+
+        Re-rolling on every tick would not give a random deadline — the
+        battle would end on the first tick whose draw happened to be below
+        the elapsed time, i.e. the minimum of many draws.
+        """
+        if (self._deploy_timer_stamp == self._post_deploy_time
+                and self._deploy_timer_target > 0):
+            return self._deploy_timer_target
+
+        lo, hi = self._deploy_timer_window()
+        target = random.randint(lo, hi) if hi > lo else lo
+        self._deploy_timer_stamp = self._post_deploy_time
+        self._deploy_timer_target = target
+        if hi > lo:
+            log.info("Deploy timer: this battle ends after %ds (drawn from %d–%ds).",
+                     target, lo, hi)
+        return target
+
     def _check_deploy_timer(self, screenshot: np.ndarray) -> bool:
         """
         Silent post-deployment countdown.
         Once the player's first wave finishes deploying, we count from
         ``self._post_deploy_time`` and end the battle automatically after
-        ``deploy_timer_seconds`` if ``deploy_timer_enabled`` is on.
+        a delay drawn between ``deploy_timer_seconds`` and
+        ``deploy_timer_seconds_max`` — if ``deploy_timer_enabled`` is on.
 
         Returns True if a retreat was triggered (caller should stop further checks).
         """
@@ -288,14 +325,15 @@ class HomeVillageLogic:
             return False
         if self._post_deploy_time <= 0:
             return False
-        seconds = int(self._profile.get("deploy_timer_seconds", 90))
+        seconds = self._resolve_deploy_deadline()
         if seconds <= 0:
             return False
         elapsed = time.time() - self._post_deploy_time
         if elapsed >= seconds:
             log.info(
-                "%sDEPLOY TIMER: %.0fs elapsed since deployment → ending battle.%s",
-                C_RED, elapsed, C_RESET,
+                "%sDEPLOY TIMER: %.0fs elapsed since deployment (target %ds) "
+                "→ ending battle.%s",
+                C_RED, elapsed, seconds, C_RESET,
             )
             self._end_battle(screenshot)
             self._attack_active = False
@@ -364,11 +402,46 @@ class HomeVillageLogic:
     #  V36 ORDERED DEPLOYMENT
     # ═══════════════════════════════════════════════════════════════════
 
+    def _skip_unplannable_base(self, screenshot: np.ndarray):
+        """V2 could not plan a deploy on this village (typically the
+        red-zone polygon failed sanity). Leave and search for the next
+        opponent instead of dumping the army with the legacy planner.
+
+        Ranked has no scout screen — there is no Next button to press
+        once the battle already started — so there we still deploy with
+        the legacy path rather than stand still and lose the army.
+        """
+        ss = adb_screencap()
+        if ss is None:
+            ss = screenshot
+
+        m = self._sr.find_template_by_name(ss, "next_button")
+        if m is None:
+            log.warning(
+                "V2 could not plan an attack and next_button is not on screen "
+                "(ranked battle?) — deploying with LEGACY V36 instead.",
+            )
+            self._v2.run_legacy(ss)
+            return
+
+        tap(m[0], m[1])
+        self._attack_active = False
+        self._battle_phase_done = False
+        self._hero_memory.clear()
+        self._initial_loot = {}
+        log.info("%s✗ V2 could not plan an attack — skipping this base, "
+                 "searching next.%s", C_RED, C_RESET)
+        if self._engine is not None:
+            self._engine.record_attack_skipped()
+
     def _execute_full_attack(self, screenshot: np.ndarray):
         # ── Smart Vision V2 fast path ──────────────────────────────────
         if self._v2.is_enabled():
             log.info("═══ SMART VISION V2 — HV ═══")
-            self._v2.execute(screenshot)
+            skip_on_fallback = bool(Settings().get("v2_skip_on_fallback", True))
+            if self._v2.execute(screenshot, allow_legacy=not skip_on_fallback):
+                return
+            self._skip_unplannable_base(screenshot)
             return
 
         h, w = screenshot.shape[:2]

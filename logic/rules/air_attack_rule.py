@@ -32,30 +32,20 @@ class AirAttackRule(AttackRule):
         skills = ctx.skills
 
         corridors = skills.corridor.map(ss, ctx.polygon, ctx.ui_cutoff, cfg)
-        if not corridors:
-            return False
 
-        side = skills.corner.pick_for_air(ss, corridors, cfg) \
-            or SafeCorridorSkill.widest(corridors)
-        rect = corridors[side]
-        fan_points = skills.fan.plan(rect, count=9)
-
-        validated: list[tuple[int, int]] = []
-        for (px, py) in fan_points:
-            ok = self._find_safe_deployable(ctx, ss, (px, py), cfg)
-            if ok is not None:
-                validated.append(ok)
-            else:
-                log.warning(
-                    "AirAttack: no valid terrain outside red zone near (%d,%d) — skipped.",
-                    px, py,
-                )
-        if not validated:
-            log.warning("AirAttack: no troop point safely outside the red zone.")
+        plan = self._plan_ring_drops(ctx, corridors, cfg)
+        if plan is None:
+            plan = self._plan_corridor_drops(ctx, corridors, cfg)
+        if plan is None:
             return False
+        side, validated, rect = plan
+
+        self._dump_plan(ctx, validated, corridor=rect, label=f"air_{side}")
 
         cluster = validated[len(validated) // 2]
-        target = ctx.base_centroid or SafeCorridorSkill.center(rect)
+        target = ctx.base_centroid or (
+            SafeCorridorSkill.center(rect) if rect else cluster
+        )
 
         air_troops = [
             t for t in self._selected_troops(ctx)
@@ -92,6 +82,115 @@ class AirAttackRule(AttackRule):
         self._stamp_engine_post_deploy(ctx, hero_memory)
         return True
 
+    # ── Drop planning ───────────────────────────────────────────────
+
+    def _plan_ring_drops(
+        self,
+        ctx: AttackContext,
+        corridors: dict,
+        cfg: dict,
+    ) -> tuple[str, list[tuple[int, int]], tuple | None] | None:
+        """Drops along the red zone offset outward — the ring hugs the
+        base, so it follows the diagonal rims that an axis-aligned
+        corridor cannot reach, and never runs out to the screen edge
+        where the playable map has already ended.
+
+        Returns None when disabled or when the ring yields nothing, so
+        the caller can fall back to the corridor fan.
+        """
+        ring_cfg = (cfg.get("deploy_ring") or {})
+        if not bool(ring_cfg.get("enabled", True)):
+            return None
+        polygon = ctx.polygon
+        if polygon is None or len(polygon) < 3:
+            return None
+
+        offset = int(ring_cfg.get("offset_px", cfg.get("stand_off_px", 80)))
+        spacing = int(ring_cfg.get("spacing_px", 45))
+        count = max(1, int(ring_cfg.get("points_per_side", 9)))
+
+        groups = ctx.skills.ring.plan(
+            polygon, ctx.base_centroid, offset_px=offset, spacing_px=spacing,
+        )
+        if not groups:
+            return None
+
+        ss = ctx.screenshot
+        usable: dict[str, list[tuple[int, int]]] = {}
+        for side, points in groups.items():
+            kept = [
+                p for p in points
+                if self._in_play_bounds(ctx, ss, p)
+                and self._is_safe_deploy_point(ctx, p)
+                and ctx.skills.obstacle.is_deployable(ss, p[0], p[1], cfg)
+            ]
+            if kept:
+                usable[side] = kept
+        if not usable:
+            log.warning("AirAttack: ring produced no deployable point.")
+            return None
+
+        preferred = ctx.skills.corner.pick_for_air(ss, corridors, cfg) \
+            if corridors else None
+        side = preferred if preferred in usable else max(
+            usable, key=lambda s: len(usable[s]),
+        )
+        picked = ctx.skills.ring.sample(usable[side], count)
+        log.info(
+            "AirAttack: ring plan on '%s' — %d/%d point(s) usable, %d chosen "
+            "(offset %dpx).",
+            side, len(usable[side]), len(groups.get(side, [])), len(picked), offset,
+        )
+        return side, picked, corridors.get(side)
+
+    def _plan_corridor_drops(
+        self,
+        ctx: AttackContext,
+        corridors: dict,
+        cfg: dict,
+    ) -> tuple[str, list[tuple[int, int]], tuple | None] | None:
+        """Legacy bbox-corridor fan, kept as the fallback."""
+        if not corridors:
+            return None
+        ss = ctx.screenshot
+        side = ctx.skills.corner.pick_for_air(ss, corridors, cfg) \
+            or SafeCorridorSkill.widest(corridors)
+        rect = corridors[side]
+        fan_points = ctx.skills.fan.plan(
+            rect,
+            count=9,
+            side=side,
+            edge_bias=float(cfg.get("deploy_edge_bias", 0.0)),
+            edge_margin_px=int(cfg.get("deploy_edge_margin_px", 60)),
+        )
+
+        validated: list[tuple[int, int]] = []
+        for (px, py) in fan_points:
+            ok = self._find_safe_deployable(ctx, ss, (px, py), cfg)
+            if ok is not None:
+                validated.append(ok)
+            else:
+                log.warning(
+                    "AirAttack: no valid terrain outside red zone near (%d,%d) — skipped.",
+                    px, py,
+                )
+        if not validated:
+            log.warning("AirAttack: no troop point safely outside the red zone.")
+            return None
+        return side, validated, rect
+
+    @staticmethod
+    def _in_play_bounds(ctx: AttackContext, screenshot, point: tuple[int, int]) -> bool:
+        shape = getattr(screenshot, "shape", None)
+        if shape is None:
+            return True
+        screen_h, screen_w = shape[:2]
+        ui_cutoff = int(getattr(ctx, "ui_cutoff", screen_h))
+        x, y = point
+        return not (
+            x < 60 or x >= screen_w - 60 or y < 110 or y >= ui_cutoff - 80
+        )
+
     def _deploy_air_troops(
         self,
         ctx: AttackContext,
@@ -105,6 +204,12 @@ class AirAttackRule(AttackRule):
         for troop in air_troops:
             if self._interrupted(ctx):
                 break
+            # Re-read the bar for every troop: an emptied card is removed
+            # and the remaining cards slide over, so a position found on
+            # the pre-attack screenshot would select the wrong troop.
+            fresh = screencap()
+            if fresh is not None:
+                ss = fresh
             card = skills.target.find_one(ss, troop)
             if card is None:
                 log.warning(
@@ -115,15 +220,23 @@ class AirAttackRule(AttackRule):
             skills.touch.tap(card[0], card[1], cfg)
             skills.touch.pre_select_settle(cfg)
             style = ctx.troop_profiles.get(troop, {}).get("style", "fan")
-            if style == "stack":
+            if self._hold_enabled(ctx, troop):
+                # Hold along the fan instead of tapping it out: one finger
+                # down deploys continuously until the card is empty.
+                spread = [cluster] if style == "stack" else (fan_points or [cluster])
+                self._hold_dump(ctx, troop, spread)
+            elif style == "stack":
                 skills.touch.long_press(cluster[0], cluster[1], None, cfg)
             else:
                 troop_profile = ctx.troop_profiles.get(troop, {})
                 stagger_ms = int(troop_profile.get("stagger_ms", 220))
                 deploy_taps = max(1, int(troop_profile.get("deploy_taps", len(fan_points))))
+
+                # Plan every drop first, then fire them as bursts. Doing
+                # the red-zone check up front keeps the actuator dumb and
+                # lets the taps go out back-to-back.
+                planned: list[tuple[int, int]] = []
                 for index in range(deploy_taps):
-                    if self._interrupted(ctx):
-                        break
                     px, py = fan_points[index % len(fan_points)]
                     if not self._is_safe_deploy_point(ctx, (px, py)):
                         log.warning(
@@ -131,8 +244,22 @@ class AirAttackRule(AttackRule):
                             px, py,
                         )
                         continue
-                    skills.touch.tap(px, py, cfg)
-                    time.sleep(stagger_ms / 1000.0)
+                    planned.append((px, py))
+
+                if stagger_ms > 0:
+                    # An explicit stagger is a deliberate spacing request,
+                    # so honour it — on the device, not in Python.
+                    burst_cfg = self._with_burst_gap(cfg, stagger_ms)
+                else:
+                    burst_cfg = cfg
+
+                chunk = max(1, int(
+                    (cfg.get("deploy_pattern", {}) or {}).get("tap_batch_size", 6)
+                ))
+                for start in range(0, len(planned), chunk):
+                    if self._interrupted(ctx):
+                        break
+                    skills.touch.tap_burst(planned[start:start + chunk], burst_cfg)
             skills.touch.post_deploy_settle(cfg)
         return []
 
@@ -204,13 +331,30 @@ class AirAttackRule(AttackRule):
             ui_cutoff = int(getattr(ctx, "ui_cutoff", screen_h))
         else:
             screen_h = screen_w = ui_cutoff = None
+        # Search ring by ring, but inside a ring try the directions that
+        # move AWAY from the base first: the rim is the part of the map
+        # that cannot hold buildings, so drifting outwards is safer than
+        # drifting towards the base.
+        centroid = getattr(ctx, "base_centroid", None)
+
+        def outwardness(offset: tuple[int, int]) -> float:
+            if centroid is None:
+                return 0.0
+            dx, dy = offset
+            cx, cy = centroid
+            here = (x - cx) ** 2 + (y - cy) ** 2
+            there = (x + dx - cx) ** 2 + (y + dy - cy) ** 2
+            return -(there - here)      # negative → sorts farthest first
+
         offsets = [(0, 0)]
         for ring in range(1, max_rings + 1):
             step = ring * step_px
-            offsets.extend([
+            ring_offsets = [
                 (0, step), (0, -step), (step, 0), (-step, 0),
                 (step, step), (step, -step), (-step, step), (-step, -step),
-            ])
+            ]
+            ring_offsets.sort(key=outwardness)
+            offsets.extend(ring_offsets)
         for dx, dy in offsets:
             candidate = (x + dx, y + dy)
             if screen_w is not None and (

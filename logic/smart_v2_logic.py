@@ -8,7 +8,10 @@ BuilderBaseLogic call when the V2 toggle is on. The new flow:
     2. The orchestrator loads JSON config, builds Skills, picks a Rule,
        and runs it.
     3. If the orchestrator returns False (no rule matched / orchestrator
-       error) we fall through to the LEGACY V36 path preserved below.
+       error) we fall through to the LEGACY V36 path preserved below —
+       unless the caller passed ``allow_legacy=False``, in which case
+       ``execute`` reports the failure and lets the caller decide (Home
+       Village skips the base and searches for the next one).
 
 Legacy V36 path (``_legacy_attack_smart`` / ``_legacy_attack_building``
 / ``_legacy_attack_storage``) remains the ultimate fallback when the CSR
@@ -64,11 +67,14 @@ class SmartV2Logic:
     def available_rules(self) -> list[str]:
         return self._orchestrator.available_rules()
 
-    def execute(self, screenshot: np.ndarray) -> None:
-        s = Settings()
-        mode: Mode = str(s.get(f"v2_mode_{self._mode_key}", "smart"))  # type: ignore[assignment]
-        target = str(s.get(f"v2_target_{self._mode_key}", ""))
+    def execute(self, screenshot: np.ndarray, allow_legacy: bool = True) -> bool:
+        """Run the V2 attack.
 
+        Returns True when an attack was carried out (by a rule, or by the
+        legacy V36 fallback). Returns False only when the orchestrator
+        found nothing to do AND ``allow_legacy`` is off — the caller then
+        owns the decision, e.g. skipping the village entirely.
+        """
         try:
             success = self._orchestrator.execute(
                 screenshot=screenshot,
@@ -77,13 +83,26 @@ class SmartV2Logic:
                 engine=self._engine,
             )
         except Exception as exc:
-            log.error("V2 orchestrator crashed (%s) — falling back to legacy V36.", exc)
+            log.error("V2 orchestrator crashed (%s) — no attack planned.", exc)
             success = False
 
         if success:
-            return
+            return True
+
+        if not allow_legacy:
+            log.warning("V2 orchestrator returned no result — legacy fallback disabled.")
+            return False
 
         log.warning("V2 orchestrator returned no result — running LEGACY V36 fallback.")
+        self.run_legacy(screenshot)
+        return True
+
+    def run_legacy(self, screenshot: np.ndarray) -> None:
+        """Legacy V36 deploy — the ultimate fallback, also callable by the
+        village logic when it decides the base must be attacked anyway."""
+        s = Settings()
+        mode: Mode = str(s.get(f"v2_mode_{self._mode_key}", "smart"))  # type: ignore[assignment]
+        target = str(s.get(f"v2_target_{self._mode_key}", ""))
         self._legacy_run(screenshot, mode, target)
 
     # ── Legacy V36 path (ULTIMATE FALLBACK) ─────────────────────────

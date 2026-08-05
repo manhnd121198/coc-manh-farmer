@@ -5,7 +5,18 @@
   "obstacle_color_std_threshold": 30,
   "obstacle_search_radius_px": 15,
   "min_corridor_width_px": 60,
-  "zoom_target_red_ratio": [0.40, 0.65],
+  "deploy_edge_bias": 0.0,
+  "deploy_edge_margin_px": 60,
+  "deploy_ring": {
+    "enabled": true,
+    "offset_px": 80,
+    "spacing_px": 45,
+    "points_per_side": 9
+  },
+  "zoom_target_red_ratio": [
+    0.40,
+    0.65
+  ],
   "polygon": {
     "approx_eps_px": 2.0,
     "min_polygon_area_ratio": 0.10,
@@ -16,14 +27,31 @@
     "left_ui_exclude_px": 0,
     "right_ui_exclude_px": 0,
     "bottom_ui_exclude_px": 0,
-    "hsv_s_min": 150,
-    "hsv_v_min": 110,
+    "hsv_s_min": 190,
+    "hsv_v_min": 140,
+    "hsv_red_hue_hi": 14,
+    "include_orange_band": false,
+    "include_pink_band": false,
+    "boundary_fragments": {
+      "enabled": true,
+      "min_bbox_px": 1500,
+      "max_fill_ratio": 0.18
+    },
     "use_inversion_fallback": true,
     "fuse_top_k": 5,
     "debug_dump": "",
-    "morph_close_h_kernel": [35, 3],
-    "morph_close_v_kernel": [3, 35],
-    "morph_close_square": [9, 9]
+    "morph_close_h_kernel": [
+      35,
+      3
+    ],
+    "morph_close_v_kernel": [
+      3,
+      35
+    ],
+    "morph_close_square": [
+      9,
+      9
+    ]
   },
   "isometric": {
     "tile_w_px_default": 32,
@@ -31,14 +59,19 @@
     "auto_calibrate": true
   },
   "deploy_pattern": {
+    "hold_until_empty": false,
+    "hold_chunk_ms": 2000,
+    "hold_max_ms": 24000,
+    "tap_batch_size": 6,
+    "tap_burst_gap_ms": 0,
     "tap_hold_min_ms": 60,
     "tap_hold_max_ms": 110,
     "long_press_ms": 2500,
     "quick_swipe_ms": 350,
-    "inter_action_min_ms": 150,
-    "inter_action_max_ms": 400,
-    "pre_select_settle_ms": 180,
-    "post_deploy_settle_ms": 300
+    "inter_action_min_ms": 60,
+    "inter_action_max_ms": 120,
+    "pre_select_settle_ms": 120,
+    "post_deploy_settle_ms": 200
   },
   "perimeter_sweep": {
     "clearance_px": 30,
@@ -51,7 +84,10 @@
     "double_tap_gap_ms": 120
   },
   "funnel": {
-    "outer_drop_pct": [0.20, 0.80],
+    "outer_drop_pct": [
+      0.20,
+      0.80
+    ],
     "main_drop_pct": 0.50,
     "delay_between_funnels_sec": 1.5,
     "delay_before_main_wave_sec": 2.0

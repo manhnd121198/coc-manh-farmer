@@ -28,6 +28,7 @@ import time
 from core.adb_handler import (
     _run as _adb_run,
     tap_raw as _adb_tap,
+    tap_batch as _adb_tap_batch,
     DEFAULT_SCREEN_WIDTH,
     DEFAULT_SCREEN_HEIGHT,
 )
@@ -45,6 +46,29 @@ class HumanTouchSkill:
         log.debug("v2.tap (%d,%d)→(%d,%d)", x, y, hx, hy)
         _adb_tap(hx, hy)
         self.settle(config)
+
+    def tap_burst(
+        self, points: list[tuple[int, int]], config: dict | None = None,
+    ) -> None:
+        """Dump a run of taps as fast as the device allows.
+
+        Same jitter as ``tap`` on every point, but the randomized
+        inter-action pause is dropped and the taps are chained inside one
+        ADB call — that pause and the per-call round-trip are what make a
+        tap-by-tap dump slow. Pacing, if wanted, comes from
+        ``deploy_pattern.tap_burst_gap_ms`` and runs on the device.
+        """
+        if not points:
+            return
+        cfg = self._cfg(config)
+        jittered = [self._jitter(x, y, cfg["tap_jitter_px"]) for (x, y) in points]
+        log.debug("v2.tap_burst %d point(s), gap=%dms, chunk=%d",
+                  len(jittered), cfg["tap_burst_gap_ms"], cfg["tap_batch_size"])
+        _adb_tap_batch(
+            jittered,
+            gap_ms=cfg["tap_burst_gap_ms"],
+            chunk_size=cfg["tap_batch_size"],
+        )
 
     def long_press(
         self, x: int, y: int, dur_ms: int | None = None, config: dict | None = None,
@@ -113,6 +137,8 @@ class HumanTouchSkill:
             "inter_action_max_ms":   int(dp.get("inter_action_max_ms", 400)),
             "pre_select_settle_ms":  int(dp.get("pre_select_settle_ms", 180)),
             "post_deploy_settle_ms": int(dp.get("post_deploy_settle_ms", 300)),
+            "tap_batch_size":        int(dp.get("tap_batch_size", 6)),
+            "tap_burst_gap_ms":      int(dp.get("tap_burst_gap_ms", 0)),
         }
 
     @staticmethod

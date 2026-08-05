@@ -66,6 +66,19 @@ def _get_troops_bar_size() -> tuple[int, int] | None:
 class ScreenReader:
     _template_cache: dict[str, tuple[np.ndarray, np.ndarray | None, str]] = {}
 
+    # Winning scale per (template, screen height). A UI template matches at
+    # the same scale on every frame of a given device, so after the first
+    # hit we try that scale alone — one matchTemplate instead of four.
+    # A miss falls back to the full sweep, so this can only cost a frame.
+    _ui_scale_memo: dict[tuple[str, int], float] = {}
+
+    # scan_for_confirmations() result for the frame it was last run on.
+    # detect_state() already scans confirmations internally; the action
+    # chain then asks for them again on the SAME screenshot. Without this
+    # the six templates are matched twice per loop (~1 s wasted).
+    _conf_cache_sig: tuple | None = None
+    _conf_cache_val: list[tuple[str, int, int, float]] = []
+
     @staticmethod
     def get_ui_cutoff(screen_height: int) -> int:
         from core.adb_handler import is_tablet_device, get_aspect_ratio
@@ -275,7 +288,27 @@ class ScreenReader:
             log.debug("OpenCV raw_match exception: %s", exc)
             return -1.0, (0, 0), (0, 0)
 
-    def _match_ui(self, screenshot: np.ndarray, tmpl_bgr: np.ndarray, threshold: float) -> tuple[int, int, float] | None:
+    @staticmethod
+    def _match_ui_at_scale(
+        gray_ss: np.ndarray, gray_t: np.ndarray, scale: float,
+    ) -> tuple[float, tuple[int, int], tuple[int, int]] | None:
+        """One scaled matchTemplate. None when the scaled template no
+        longer fits inside the frame."""
+        if abs(scale - 1.0) < 0.02:
+            scaled_t = gray_t
+        else:
+            nw = max(8, int(gray_t.shape[1] * scale))
+            nh = max(8, int(gray_t.shape[0] * scale))
+            if nw > gray_ss.shape[1] or nh > gray_ss.shape[0]:
+                return None
+            interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
+            scaled_t = cv2.resize(gray_t, (nw, nh), interpolation=interp)
+        return ScreenReader._raw_match(gray_ss, scaled_t, None, False)
+
+    def _match_ui(
+        self, screenshot: np.ndarray, tmpl_bgr: np.ndarray, threshold: float,
+        memo_key: str | None = None,
+    ) -> tuple[int, int, float] | None:
         try:
             h, w = screenshot.shape[:2]
             gray_ss = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
@@ -285,31 +318,45 @@ class ScreenReader:
             base_scales = [1.0, round(rel_scale, 2), round(rel_scale * 0.85, 2), round(rel_scale * 1.15, 2), round(rel_scale * 1.30, 2)]
             ui_scales = sorted(list(set([s for s in base_scales if 0.3 <= s <= 2.5])))
 
+            # ── Fast path: the scale that worked last time ────────────
+            # A hit here skips the other 3-4 full-frame matches. A miss
+            # just falls through to the sweep below, so accuracy is
+            # unchanged — only the order of work differs.
+            memo = self._ui_scale_memo.get((memo_key, h)) if memo_key else None
+            if memo is not None:
+                hit = self._match_ui_at_scale(gray_ss, gray_t, memo)
+                if hit is not None and hit[0] >= threshold:
+                    val, loc, dims = hit
+                    return loc[0] + dims[1] // 2, loc[1] + dims[0] // 2, val
+
             best_val = -1.0
             best_loc = (0, 0)
             best_dims = (gray_t.shape[0], gray_t.shape[1])
+            best_scale = 1.0
 
             for scale in ui_scales:
-                if abs(scale - 1.0) < 0.02:
-                    scaled_t = gray_t
-                else:
-                    nw = max(8, int(gray_t.shape[1] * scale))
-                    nh = max(8, int(gray_t.shape[0] * scale))
-                    if nw > gray_ss.shape[1] or nh > gray_ss.shape[0]:
-                        continue
-                    interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
-                    scaled_t = cv2.resize(gray_t, (nw, nh), interpolation=interp)
-
-                val, loc, dims = self._raw_match(gray_ss, scaled_t, None, False)
+                if memo is not None and abs(scale - memo) < 0.02:
+                    continue  # already tried on the fast path
+                hit = self._match_ui_at_scale(gray_ss, gray_t, scale)
+                if hit is None:
+                    continue
+                val, loc, dims = hit
                 if val > best_val:
                     best_val = val
                     best_loc = loc
                     best_dims = dims
+                    best_scale = scale
 
             if best_val >= threshold:
+                if memo_key:
+                    self._ui_scale_memo[(memo_key, h)] = best_scale
                 cx = best_loc[0] + best_dims[1] // 2
                 cy = best_loc[1] + best_dims[0] // 2
                 return cx, cy, best_val
+            if memo_key and memo is not None:
+                # Template stopped matching at the memoised scale AND at
+                # every other one — drop the memo so a later hit relearns.
+                self._ui_scale_memo.pop((memo_key, h), None)
             return None
         except Exception as exc:
             log.debug("_match_ui exception: %s", exc)
@@ -468,11 +515,22 @@ class ScreenReader:
             result = self._match_building(screenshot, tmpl_bgr, tmpl_mask, thr)
         else:
             thr = threshold if threshold is not None else _ui_thr()
-            result = self._match_ui(screenshot, tmpl_bgr, thr)
+            result = self._match_ui(screenshot, tmpl_bgr, thr, memo_key=template_name)
 
         return (result[0], result[1]) if result else None
 
+    @staticmethod
+    def _frame_signature(screenshot: np.ndarray) -> tuple:
+        """Cheap identity for a screenshot: shape + a 1/16-sampled hash.
+        Two frames that agree on both are the same screen for our purposes
+        (a popup covers far more than one sampled pixel)."""
+        return screenshot.shape, hash(screenshot[::16, ::16].tobytes())
+
     def scan_for_confirmations(self, screenshot: np.ndarray) -> list[tuple[str, int, int, float]]:
+        sig = self._frame_signature(screenshot)
+        if sig == ScreenReader._conf_cache_sig:
+            return list(ScreenReader._conf_cache_val)
+
         names = [
             "ranked_mode_btn", "normal_mode_btn",
             "attack_button2",
@@ -484,23 +542,35 @@ class ScreenReader:
             loc = self.find_template_by_name(screenshot, name)
             if loc:
                 found.append((name, loc[0], loc[1], 1.0))
+
+        ScreenReader._conf_cache_sig = sig
+        ScreenReader._conf_cache_val = list(found)
         return found
 
-    def detect_state(self, screenshot: np.ndarray) -> GameState:
+    def detect_state(self, screenshot: np.ndarray, mode: str | None = None) -> GameState:
+        """Classify the current screen.
+
+        ``mode`` ("home_village" / "builder_base") lets the caller skip the
+        template family that cannot appear. Seven BB templates in front of
+        the Home Village checks cost ~1.4 s per frame for nothing when the
+        bot is farming HV. Omit it and everything is checked, as before.
+        """
         f = self.find_template_by_name
-        
+        check_bb = mode != "home_village"
+
         if f(screenshot, "connection_error"):  return GameState.DISCONNECTED
         if f(screenshot, "reload_button"):     return GameState.DISCONNECTED
         if f(screenshot, "loading_screen"):    return GameState.LOADING
-        
+
         # 1. SCOUTING (Home Village)
         if f(screenshot, "next_button"):       return GameState.OPPONENT_FOUND
-        
+
         # ── BUILDER BASE SPECIFIC CHECKS ──
-        if f(screenshot, "bb_find_match", 0.88):     return GameState.BUILDER_BASE_HOME
-        if f(screenshot, "bb_attack_confirm", 0.88): return GameState.BUILDER_BASE_HOME
-        if f(screenshot, "bb_return_home", 0.80):    return GameState.BATTLE_ENDED
-        if f(screenshot, "bb_battle_result", 0.80):  return GameState.BATTLE_ENDED
+        if check_bb:
+            if f(screenshot, "bb_find_match", 0.88):     return GameState.BUILDER_BASE_HOME
+            if f(screenshot, "bb_attack_confirm", 0.88): return GameState.BUILDER_BASE_HOME
+            if f(screenshot, "bb_return_home", 0.80):    return GameState.BATTLE_ENDED
+            if f(screenshot, "bb_battle_result", 0.80):  return GameState.BATTLE_ENDED
 
         # The "LOT ASSESET SHIELD" is a last-resort home-village hint;
         # we only honour it AFTER the CONFIRMING dialog has been ruled out
@@ -508,19 +578,22 @@ class ScreenReader:
         if f(screenshot, "lot_asseset", 0.35):       return GameState.IN_BATTLE
         if f(screenshot, "end_battle_button", 0.80): return GameState.IN_BATTLE
         if f(screenshot, "timer_top_start", 0.75):   return GameState.IN_BATTLE
-        
-        if f(screenshot, "bb_battle_hud", 0.70):     return GameState.BB_BATTLE
-        
-        h, w = screenshot.shape[:2]
-        top_roi = screenshot[0:int(h * 0.25), int(w * 0.25):int(w * 0.75)]
-        cached_prep = self._get_cached_template("bb_prep_text")
-        cached_act = self._get_cached_template("bb_active_text")
-        
-        if cached_prep and self._match_ui(top_roi, cached_prep[0], 0.70):
-            return GameState.BB_BATTLE
-        if cached_act and self._match_ui(top_roi, cached_act[0], 0.70):
-            return GameState.BB_BATTLE
-        
+
+        if check_bb:
+            if f(screenshot, "bb_battle_hud", 0.70): return GameState.BB_BATTLE
+
+            h, w = screenshot.shape[:2]
+            top_roi = screenshot[0:int(h * 0.25), int(w * 0.25):int(w * 0.75)]
+            cached_prep = self._get_cached_template("bb_prep_text")
+            cached_act = self._get_cached_template("bb_active_text")
+
+            if cached_prep and self._match_ui(top_roi, cached_prep[0], 0.70,
+                                              memo_key="bb_prep_text@roi"):
+                return GameState.BB_BATTLE
+            if cached_act and self._match_ui(top_roi, cached_act[0], 0.70,
+                                             memo_key="bb_active_text@roi"):
+                return GameState.BB_BATTLE
+
         # ── HOME VILLAGE STATE PRIORITY ────────────────────────────────
         confirmations = self.scan_for_confirmations(screenshot)
         if confirmations: return GameState.CONFIRMING
@@ -538,3 +611,8 @@ class ScreenReader:
 
     def clear_cache(self) -> None:
         self._template_cache.clear()
+        # A re-captured asset can match at a different scale, and the
+        # cached confirmations were computed with the old templates.
+        ScreenReader._ui_scale_memo.clear()
+        ScreenReader._conf_cache_sig = None
+        ScreenReader._conf_cache_val = []

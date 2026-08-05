@@ -75,6 +75,19 @@ class SmartV2Panel(QGroupBox):
         self._chk_enable.stateChanged.connect(self._emit)
         root.addWidget(self._chk_enable)
 
+        self._chk_skip_fallback = QCheckBox(
+            "Skip base when V2 can't plan (press Next instead of legacy V36)",
+        )
+        self._chk_skip_fallback.setToolTip(
+            "When the red-zone polygon can't be detected, the orchestrator\n"
+            "has no plan. ON  → leave the village and search for the next\n"
+            "opponent (the battle counts as a skip, not an attack).\n"
+            "OFF → dump the army with the legacy V36 planner.\n"
+            "Ranked always deploys — there is no Next button mid-battle.",
+        )
+        self._chk_skip_fallback.stateChanged.connect(self._emit)
+        root.addWidget(self._chk_skip_fallback)
+
         form = QFormLayout()
 
         self._combo_mode = QComboBox()
@@ -187,8 +200,9 @@ class SmartV2Panel(QGroupBox):
         return f"{base}_{self._mode_key}"
 
     def _load(self) -> None:
-        for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_zoom, self._spin_wait):
+        for w in (self._chk_enable, self._chk_skip_fallback, self._combo_mode,
+                  self._combo_target, self._combo_rule, self._spin_zoom,
+                  self._spin_wait):
             w.blockSignals(True)
 
         self._chk_enable.setChecked(bool(self._s.get(self._key("v2_enabled"), False)))
@@ -204,11 +218,15 @@ class SmartV2Panel(QGroupBox):
         ridx = self._combo_rule.findData(rule)
         self._combo_rule.setCurrentIndex(max(0, ridx))
 
+        self._chk_skip_fallback.setChecked(
+            bool(self._s.get("v2_skip_on_fallback", True)),
+        )
         self._spin_zoom.setValue(int(self._s.get("v2_zoom_out_steps", 2)))
         self._spin_wait.setValue(float(self._s.get("v2_decoration_wait", 5.0)))
 
-        for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_zoom, self._spin_wait):
+        for w in (self._chk_enable, self._chk_skip_fallback, self._combo_mode,
+                  self._combo_target, self._combo_rule, self._spin_zoom,
+                  self._spin_wait):
             w.blockSignals(False)
 
         self._on_mode_changed()
@@ -218,6 +236,7 @@ class SmartV2Panel(QGroupBox):
         self._s.set(self._key("v2_mode"),     self._combo_mode.currentData() or "smart")
         self._s.set(self._key("v2_target"),   self._combo_target.currentData() or "")
         self._s.set(self._key("v2_rule"),     self._combo_rule.currentData() or "auto")
+        self._s.set("v2_skip_on_fallback",    self._chk_skip_fallback.isChecked())
         self._s.set("v2_zoom_out_steps",      self._spin_zoom.value())
         self._s.set("v2_decoration_wait",     self._spin_wait.value())
         self._s.save()

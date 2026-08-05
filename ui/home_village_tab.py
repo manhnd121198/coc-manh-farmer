@@ -174,8 +174,24 @@ class HomeVillageTab(QWidget):
         self._deploy_timer_seconds = QSpinBox()
         self._deploy_timer_seconds.setRange(5, 300)
         self._deploy_timer_seconds.setSingleStep(5)
-        self._deploy_timer_seconds.setValue(90)
+        self._deploy_timer_seconds.setValue(110)
+        self._deploy_timer_seconds.setToolTip(
+            "Lower bound of the countdown. Each battle draws its own value\n"
+            "between this and the 'to (s)' box on the right.",
+        )
         retreat_layout.addWidget(self._deploy_timer_seconds, 5, 1)
+
+        retreat_layout.addWidget(QLabel("to (s):"), 5, 2)
+        self._deploy_timer_seconds_max = QSpinBox()
+        self._deploy_timer_seconds_max.setRange(5, 300)
+        self._deploy_timer_seconds_max.setSingleStep(5)
+        self._deploy_timer_seconds_max.setValue(120)
+        self._deploy_timer_seconds_max.setToolTip(
+            "Upper bound of the countdown. A fresh value is drawn once per\n"
+            "battle, so every attack surrenders at a slightly different time.\n"
+            "Set it equal to the left box for a fixed timer.",
+        )
+        retreat_layout.addWidget(self._deploy_timer_seconds_max, 5, 3)
 
         retreat_group.setLayout(retreat_layout)
         layout.addWidget(retreat_group)
@@ -338,6 +354,10 @@ class HomeVillageTab(QWidget):
             "retreat_time": self._retreat_time.value(),
             "deploy_timer_enabled": self._deploy_timer_enabled.isChecked(),
             "deploy_timer_seconds": self._deploy_timer_seconds.value(),
+            "deploy_timer_seconds_max": max(
+                self._deploy_timer_seconds.value(),
+                self._deploy_timer_seconds_max.value(),
+            ),
             "hv_match_mode": match_mode,
             "attack_strategy": mode,
             "macro_file": self._macro_file,
@@ -358,7 +378,11 @@ class HomeVillageTab(QWidget):
         self._retreat_dark.setValue(profile.get("retreat_dark_elixir", 500))
         self._retreat_time.setValue(profile.get("retreat_time", 0))
         self._deploy_timer_enabled.setChecked(profile.get("deploy_timer_enabled", False))
-        self._deploy_timer_seconds.setValue(profile.get("deploy_timer_seconds", 90))
+        self._deploy_timer_seconds.setValue(profile.get("deploy_timer_seconds", 110))
+        self._deploy_timer_seconds_max.setValue(
+            profile.get("deploy_timer_seconds_max",
+                        profile.get("deploy_timer_seconds", 120)),
+        )
         self._match_mode.setCurrentIndex(
             1 if str(profile.get("hv_match_mode", "normal")).lower() == "ranked" else 0
         )

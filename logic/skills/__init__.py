@@ -6,6 +6,7 @@ from logic.skills.fan_planner import FanPlannerSkill
 from logic.skills.spell_planner import SpellPlannerSkill
 from logic.skills.hero_planner import HeroPlannerSkill
 from logic.skills.perimeter_planner import PerimeterPlannerSkill
+from logic.skills.ring_planner import RingPlannerSkill
 
 __all__ = [
     "HumanTouchSkill",
@@ -14,4 +15,5 @@ __all__ = [
     "SpellPlannerSkill",
     "HeroPlannerSkill",
     "PerimeterPlannerSkill",
+    "RingPlannerSkill",
 ]

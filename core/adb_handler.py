@@ -240,6 +240,39 @@ def tap_raw(x: int, y: int) -> None:
     _run(["shell", "input", "tap", str(x), str(y)])
 
 
+def tap_batch(
+    points: list[tuple[int, int]],
+    gap_ms: int = 0,
+    chunk_size: int = 6,
+) -> None:
+    """Send several taps per ADB invocation instead of one call each.
+
+    Measured on this setup: an ``adb shell`` round-trip costs ~38 ms and
+    the on-device ``input`` binary ~120 ms. Chaining taps inside a single
+    shell removes the round-trip from all but the first tap of a chunk.
+    ``input`` itself stays the floor — that is the device's cost, not
+    something the bot can shave.
+
+    ``gap_ms`` inserts an on-device sleep between taps (0 = as fast as
+    the device manages). Chunking keeps each command short enough for the
+    shell and each ADB call short enough to stay responsive to a stop.
+    """
+    if not points:
+        return
+    size = max(1, int(chunk_size))
+    gap = max(0, int(gap_ms))
+    for start in range(0, len(points), size):
+        chunk = points[start:start + size]
+        parts: list[str] = []
+        for (x, y) in chunk:
+            parts.append(f"input tap {int(x)} {int(y)}")
+            if gap:
+                parts.append(f"sleep {gap / 1000.0:.3f}")
+        # Budget: ~250 ms per tap plus the sleeps, floored at 15 s.
+        timeout = max(15, int(len(chunk) * (0.25 + gap / 1000.0)) + 5)
+        _run(["shell", "; ".join(parts)], timeout=timeout)
+
+
 def long_press(x: int, y: int, duration_ms: int = 800) -> None:
     hx, hy = _humanize_coord(x, y)
     dur = duration_ms + random.randint(-80, 120)

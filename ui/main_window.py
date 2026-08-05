@@ -408,7 +408,8 @@ class MainWindow(QMainWindow):
             "retreat_gold": 50000, "retreat_elixir": 50000,
             "retreat_dark_elixir": 500, "retreat_time": 0,
             # HV deploy timer
-            "deploy_timer_enabled": False, "deploy_timer_seconds": 90,
+            "deploy_timer_enabled": False,
+            "deploy_timer_seconds": 110, "deploy_timer_seconds_max": 120,
             # HV attack
             "hv_match_mode": "normal",
             "attack_strategy": "smart_target", "macro_file": "",

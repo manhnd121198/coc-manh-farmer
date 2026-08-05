@@ -132,6 +132,10 @@ _DEFAULTS: dict = {
     "v2_decoration_wait": 5.0,
     "v2_rule_hv":         "auto",
     "v2_rule_bb":         "auto",
+    # When the V2 orchestrator cannot plan an attack (red-zone polygon
+    # detection failed), skip the village and search for the next one
+    # instead of dumping the army with the legacy V36 planner.
+    "v2_skip_on_fallback": True,
 
     # Game Presence
     "game_package": "com.supercell.clashofclans",

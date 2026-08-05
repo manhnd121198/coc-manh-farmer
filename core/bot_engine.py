@@ -40,10 +40,14 @@ ACTION_CHAIN_MAX_LOOPS = 15
 ACTION_CHAIN_SLEEP = 1.0
 STUCK_TIMEOUT = 20
 
-# After tapping `attack_button2` (Find a Match) the game *sometimes*
-# shows an extra Confirm popup — usually in Ranked mode, occasionally
-# in Normal. We poll for `confirm_button` for this many seconds before
-# giving up so we never miss it, and never freeze if it doesn't appear.
+# After tapping `attack_button2` (Find a Match) RANKED always shows an
+# extra Confirm popup. We poll for `confirm_button` for this many seconds
+# so we never miss it, and never freeze if it doesn't appear.
+#
+# Normal mode does NOT get this grace window: the popup is rare there, so
+# the 4 s wait was paid on every single search for nothing. When it does
+# appear, the next action-chain iteration taps it anyway (`confirm_button`
+# is tier 1 in the priority table) — one loop later instead of instantly.
 POST_ATTACK_CONFIRM_WAIT = 4.0
 POST_ATTACK_CONFIRM_POLL = 0.5
 
@@ -100,6 +104,17 @@ class BotEngine(QThread):
     def record_skip(self) -> None:
         """One village passed over because its loot was below threshold."""
         self._skip_count += 1
+        self.stats_changed.emit(self._attack_count, self._skip_count)
+
+    def record_attack_skipped(self) -> None:
+        """A battle that was already tallied turned out to be unplayable
+        (V2 could not plan a deploy). Move it from the attack column to
+        the skip column so the session numbers stay honest."""
+        if self._attack_count > 0:
+            self._attack_count -= 1
+        self._skip_count += 1
+        log.info("SESSION: %d attack(s), %d skip(s).",
+                 self._attack_count, self._skip_count)
         self.stats_changed.emit(self._attack_count, self._skip_count)
 
     def reset_stats(self) -> None:
@@ -271,7 +286,7 @@ class BotEngine(QThread):
         if screenshot is None:
             return
 
-        detected = self._screen_reader.detect_state(screenshot)
+        detected = self._screen_reader.detect_state(screenshot, self._mode)
         prev_state = self._sm.state
         if detected != prev_state:
             self._sm.transition(detected)
@@ -370,13 +385,12 @@ class BotEngine(QThread):
 
     # ── Fallback Action Chain ───────────────────────────────────────────
 
+    def _is_ranked(self) -> bool:
+        return str(self._profile.get("hv_match_mode", "normal")).lower() == "ranked"
+
     def _handle_action_chain(self) -> None:
         # Respect the user's HV match-mode choice (Normal vs Ranked).
-        preferred_mode = (
-            "ranked_mode_btn"
-            if str(self._profile.get("hv_match_mode", "normal")).lower() == "ranked"
-            else "normal_mode_btn"
-        )
+        preferred_mode = "ranked_mode_btn" if self._is_ranked() else "normal_mode_btn"
         rejected_mode = (
             "normal_mode_btn" if preferred_mode == "ranked_mode_btn" else "ranked_mode_btn"
         )
@@ -402,7 +416,7 @@ class BotEngine(QThread):
             if screenshot is None:
                 time.sleep(ACTION_CHAIN_SLEEP)
                 continue
-            new_state = self._screen_reader.detect_state(screenshot)
+            new_state = self._screen_reader.detect_state(screenshot, self._mode)
             if new_state not in (GameState.CONFIRMING, GameState.BB_CONFIRMING, GameState.UNKNOWN):
                 self._sm.transition(new_state)
                 self.state_changed.emit(new_state.name)
@@ -418,13 +432,12 @@ class BotEngine(QThread):
                     name, cx, cy, _ = confirmations[0]
                     log.debug("ACTION-CHAIN tap '%s' at (%d,%d)", name, cx, cy)
                     tap(cx, cy)
-                    # ── Post-attack Confirm grace window ──────────────
-                    # The "Find a Match" button (attack_button2) is
-                    # sometimes followed by an extra Confirm popup
-                    # (always in Ranked, occasionally in Normal). We
-                    # poll briefly for it so it's never missed even
-                    # when the state has already transitioned.
-                    if name == "attack_button2":
+                    # ── Post-attack Confirm grace window (Ranked only) ─
+                    # "Find a Match" (attack_button2) is always followed
+                    # by a Confirm popup in Ranked, so poll for it. In
+                    # Normal it is rare — waiting for it there costs 4 s
+                    # on every search, and the next loop catches it.
+                    if name == "attack_button2" and self._is_ranked():
                         self._await_post_attack_confirm()
             time.sleep(ACTION_CHAIN_SLEEP)
 
