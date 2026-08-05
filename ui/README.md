@@ -22,6 +22,7 @@ A custom logger terminal pane that reads from the logging module. Uses colored t
 
 ### 5. `home_village_tab.py` & `builder_base_tab.py`
 Provides configuration settings for each village (attack selections, hero checkboxes, target limits, and spell combinations).
+- The Home Village retreat box carries the post-deploy countdown as a **range** (`deploy_timer_seconds` … `deploy_timer_seconds_max`, default 110–120 s). Each battle draws its own value, so attacks do not all surrender on the same second; setting both boxes to the same number restores a fixed timer.
 
 ### 6. `sequence_builder_tab.py`
 Visual sequence builder enabling users to drag, drop, and construct custom sequences (like clicking barracks, opening shops, or selecting bases).
@@ -31,4 +32,4 @@ Visual sequence builder enabling users to drag, drop, and construct custom seque
 - **Interactive Assist:** A setup assistant that displays screenshots and prompts users to click missing reference coordinates, saving crops directly back to the database.
 
 ### 8. `smart_v2_panel.py`
-Exposes the advanced computer-vision rules options, allowing users to select deployment patterns, rules, and target priorities.
+Exposes the advanced computer-vision rules options, allowing users to select deployment patterns, rules, and target priorities. Also carries the **"Skip base when V2 can't plan"** toggle (`v2_skip_on_fallback`): ON presses Next and looks for another opponent, OFF keeps the legacy V36 deploy as the fallback.

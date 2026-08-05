@@ -8,9 +8,21 @@ This directory processes screenshot frames, extracts values via text recognition
 
 ### 1. `screen_reader.py`
 The primary image processing engine. Takes screenshots and scans for templates:
+- **Fast paths (all fail-safe — a miss only costs the old, slower work):**
+  - `detect_state(screenshot, mode)` — passing `"home_village"` skips the seven Builder Base templates that cannot match there (~17% of a full classification). Omit `mode` and everything is checked, as before.
+  - `_ui_scale_memo` — remembers which scale a UI template matched at for the current screen height and tries that one first, turning four full-frame matches into one (~3.7× on a hit). A miss falls back to the full sweep and drops the memo.
+  - `_conf_cache_sig` / `_conf_cache_val` — `scan_for_confirmations()` caches its result per frame (shape + sampled hash), so the action chain no longer re-matches the six confirmation templates that `detect_state()` just matched.
+  - `clear_cache()` clears all three alongside the template cache.
 - **UI Elements:** Employs standard template matching with high thresholds (e.g. `0.80`) to identify static menu assets.
 - **Troop/Spell/Hero Cards:** Scrapes the lower HUD strip (below the battlefield cutoff), converting screenshots to grayscale, resizing assets using multiple search scales (from `0.7x` to `1.1x` by default), and matching elements.
 - **Battlefield Bounding Box:** Detects red boundary lines using HSV threshold ranges to find safe grid coordinates.
+
+### `skills/red_zone_polygon.py`
+Turns the perimeter into a closed polygon. Two properties of the target drive the design and are easy to get wrong:
+- The line is **narrow in colour** — sampled at H 9–11, S 207–217, V 168–193. Anything looser pulls in torches, fires, dirt paths and purple buildings; measured on one frame, those made up 87 % of the mask and the hull then tracked them instead of the boundary (too wide on one base, 22 % of the screen on the next). See `config/README.md` for the bands.
+- The line is **thin**, so the mask is a scatter of fragments rather than one blob. Attempt 0 therefore keeps contours that fill under `max_fill_ratio` of their bounding box — a line fills ~1.4 %, a decoration a third — and unions them. Only if that fails does it fall back to largest-contour and then top-K fusion.
+
+`polygon.debug_dump` writes `redzone_<mode>_<ts>.png` on sanity failure; `AttackRule._dump_plan` writes `plan_<label>_<ts>.png` plus an un-annotated `_raw.png` for every accepted plan. Tune against the raw frame — the overlay strokes the polygon in exactly the red the mask hunts for.
 - **Deployment Line Generator:** Calculates coordinate lists around the detected battlefield grid margins to drop troops.
 
 ### 2. `ocr_reader.py`

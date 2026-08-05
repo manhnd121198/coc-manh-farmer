@@ -24,6 +24,11 @@ Bot tự động farm **Clash of Clans** chạy trên máy tính Windows. Bot ch
 - Tự phát hiện mất kết nối, popup bất thường và trạng thái bị kẹt.
 - Có các profile hiệu năng `Ultra`, `High`, `Medium`, `Low` và `Smart Default`.
 - Cho phép chỉnh cấu hình chiến thuật bằng JSON và hot reload khi bot đang chạy.
+- Bỏ qua làng khi không dựng được kế hoạch tấn công (tùy chọn **Skip base when V2 can't plan**)
+  thay vì thả quân bừa; số trận đánh và số làng bỏ qua được đếm theo phiên.
+- Hẹn giờ đầu hàng sau khi thả quân theo **khoảng ngẫu nhiên** (mặc định 110–120 giây),
+  mỗi trận bốc một giá trị riêng.
+- Thả quân bằng tap theo cụm (gộp nhiều lệnh ADB) hoặc giữ ngón tay tới khi hết thẻ quân.
 
 ## Các chiến thuật
 
@@ -148,10 +153,14 @@ Các thông số nên điều chỉnh:
 ├── vision/                    # OpenCV, OCR và nhận diện vùng an toàn
 ├── ui/                        # Giao diện PyQt5
 ├── assets/templates/          # Ảnh mẫu dùng để nhận diện
-├── profiles/                  # Profile người dùng
+├── profiles/                  # Profile người dùng và settings.json
+├── strategies/                # Sequence do người dùng tạo
 ├── recordings/                # Macro đã ghi
 └── tests/                     # Unit test
 ```
+
+Mỗi thư mục mã nguồn (`core/`, `logic/`, `vision/`, `ui/`, `config/`, `assets/`) có README
+riêng mô tả chi tiết từng file.
 
 ## Chạy kiểm thử
 

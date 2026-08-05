@@ -13,13 +13,14 @@ This directory houses the graphical templates, asset catalogues, and logging dir
 └── templates/                    # Image template library
     ├── builder_base/             # Templates for Builder Base cards and indicators
     ├── buildings/                # Templates for defenses, Town Halls, and collectors
-    ├── buttons/                  # Standard button triggers
     ├── heroes/                   # Hero cards and ability icons
     ├── spells/                   # Spell cards
     ├── troops/                   # Troop selection cards
-    ├── ui_elements/              # UI popups, loading indicators, and error panels
+    ├── ui_elements/              # Buttons, popups, loading indicators, and error panels
     └── manifest.json             # Single source of truth database mapping keys to files
 ```
+
+These six directory names are also the `category` values used by the manifest, and the category is what decides which matching threshold the vision engine applies (`_ui_thr`, `_troop_thr`, `_building_thr`, `_bb_card_thr`). A new template therefore needs the right category, not just the right folder.
 
 ---
 
