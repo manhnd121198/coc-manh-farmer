@@ -264,6 +264,51 @@ class RingSweepHoldWindowTest(unittest.TestCase):
         self.assertGreater(len({self._window(cfg, "x") for _ in range(50)}), 1)
 
 
+class RingSweepHoldRoutingTest(unittest.TestCase):
+    """Which gesture the sides get, and what happens when it fails."""
+
+    DROPS = [(100, 100), (200, 200), (300, 300), (400, 400)]
+
+    def _run(self, available, multi_ok=True):
+        from unittest import mock
+        from types import SimpleNamespace
+        from logic.rules import ring_sweep_rule
+
+        touch = mock.Mock()
+        ctx = SimpleNamespace(
+            config={}, skills=SimpleNamespace(touch=touch), engine=None,
+        )
+        rule = ring_sweep_rule.RingSweepRule()
+        with mock.patch.object(rule, "_interrupted", return_value=False), \
+             mock.patch.object(ring_sweep_rule.multi_touch, "available",
+                               return_value=available), \
+             mock.patch.object(ring_sweep_rule.multi_touch, "hold_all",
+                               return_value=multi_ok) as hold_all:
+            rule._hold_sides(ctx, {}, "baba", self.DROPS)
+        return hold_all, touch
+
+    def test_multi_touch_presses_every_side_in_one_gesture(self):
+        hold_all, touch = self._run(available=True)
+        self.assertEqual(1, hold_all.call_count)
+        self.assertEqual(self.DROPS, hold_all.call_args.args[0])
+        touch.long_press.assert_not_called()
+
+    def test_without_multi_touch_each_side_is_held_in_turn(self):
+        hold_all, touch = self._run(available=False)
+        hold_all.assert_not_called()
+        self.assertEqual(
+            self.DROPS,
+            [c.args[:2] for c in touch.long_press.call_args_list],
+        )
+
+    def test_a_failed_multi_touch_still_deploys(self):
+        """Root can disappear mid-session (Magisk denial, adb reconnect).
+        Losing the gesture must not mean losing the whole attack."""
+        hold_all, touch = self._run(available=True, multi_ok=False)
+        self.assertEqual(1, hold_all.call_count)
+        self.assertEqual(len(self.DROPS), touch.long_press.call_count)
+
+
 @unittest.skipUnless(_HAVE_CV2, "requires opencv + numpy")
 class RingSweepRegistrationTest(unittest.TestCase):
     def test_rule_is_registered_and_selectable(self):

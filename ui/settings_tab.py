@@ -146,6 +146,24 @@ class SettingsTab(QWidget):
         self._chk_fast_entry.stateChanged.connect(self._on_value_changed)
         vis_lay.addWidget(self._chk_fast_entry)
 
+        self._chk_multi_touch = QCheckBox(
+            "Multi-finger deploy — press every spot at once (needs root)",
+        )
+        self._chk_multi_touch.setToolTip(
+            "Ring Sweep normally holds one side of the base at a time, so\n"
+            "the card drains into the earlier sides and a small army can\n"
+            "leave the last side empty. With this on, all four spots are\n"
+            "pressed together and the army splits between them.\n\n"
+            "It writes touch events straight to the touchscreen device,\n"
+            "which SELinux only allows as root — plain ADB cannot put two\n"
+            "fingers down at all. Without root it turns itself off and the\n"
+            "one-at-a-time behaviour is used instead.\n\n"
+            "The device node and axis orientation live in\n"
+            "config/v2_attack_rules.json under \"multi_touch\".",
+        )
+        self._chk_multi_touch.stateChanged.connect(self._on_value_changed)
+        vis_lay.addWidget(self._chk_multi_touch)
+
         # Thresholds
         thr_row = QHBoxLayout()
         thr_row.addWidget(QLabel("Troop conf:"))
@@ -344,6 +362,7 @@ class SettingsTab(QWidget):
         self._chk_skip_loot.setChecked(s.get("skip_loot_ocr"))
         self._chk_skip_timer.setChecked(s.get("skip_timer_ocr"))
         self._chk_fast_entry.setChecked(bool(s.get("hv_fast_entry", False)))
+        self._chk_multi_touch.setChecked(bool(s.get("multi_touch_enabled", False)))
         self._spin_troop_thr.setValue(s.get("vision_troop_threshold"))
         self._spin_ui_thr.setValue(s.get("vision_ui_threshold"))
         self._spin_building_thr.setValue(s.get("vision_building_threshold"))
@@ -375,6 +394,7 @@ class SettingsTab(QWidget):
         s.set("skip_loot_ocr", self._chk_skip_loot.isChecked())
         s.set("skip_timer_ocr", self._chk_skip_timer.isChecked())
         s.set("hv_fast_entry", self._chk_fast_entry.isChecked())
+        s.set("multi_touch_enabled", self._chk_multi_touch.isChecked())
         s.set("vision_troop_threshold", self._spin_troop_thr.value())
         s.set("vision_ui_threshold", self._spin_ui_thr.value())
         s.set("vision_building_threshold", self._spin_building_thr.value())

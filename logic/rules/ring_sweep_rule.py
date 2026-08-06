@@ -11,25 +11,27 @@ visited in random order, so the same base attacked twice does not produce
 the same four spots in the same sequence. Every candidate point was already
 verified to sit outside the no-deploy zone.
 
-Why the four holds are sequential and not simultaneous
-------------------------------------------------------
-Four fingers down at once would be the ideal shape, and it is not reachable
-from here. ``input`` carries one pointer, two parallel ``input swipe``
-processes are two independent drags, and writing MT protocol B events to the
-touchscreen node is refused: SELinux is Enforcing and the shell user cannot
-open ``/dev/input/event*`` for write without root.
+All four sides at once, or one at a time
+----------------------------------------
+With ``multi_touch.enabled`` and root, the four spots are pressed together
+and the hold window is spent once — every side starts receiving troops in
+the first second, and a small army splits between the sides instead of
+draining into whichever one went first.
 
-So the four holds run one after another, each for the configured window.
-A held card empties at roughly 7 troops per second, so a 5-6 s hold is
-about 35-42 troops per side — sized for a full army. A card that runs dry
-part-way simply stops producing, and the remaining presses land on an
-empty spot and cost only their own duration.
+Without it there is no way to put two pointers down: ``input`` carries one
+pointer, two parallel ``input swipe`` processes are two independent drags,
+and the touchscreen node cannot be written to as the shell user because
+SELinux is Enforcing. The fallback holds each side in turn for the full
+window. A held card empties at roughly 7 troops per second, so a 5-6 s
+hold is about 35-42 troops per side — size it to the army, because a card
+that runs dry part-way leaves the later sides empty.
 """
 
 from __future__ import annotations
 
 import random
 
+from core import multi_touch
 from core.logger import BotLogger
 from logic.rules.air_attack_rule import AirAttackRule
 from logic.rules.base_rule import AttackContext
@@ -61,6 +63,37 @@ class RingSweepRule(AirAttackRule):
             lo, hi = 5000, 6000
         lo, hi = max(300, min(lo, hi)), max(300, max(lo, hi))
         return random.randint(lo, hi)
+
+    def _hold_sides(
+        self, ctx: AttackContext, sweep_cfg: dict, troop: str, drops: list,
+    ) -> None:
+        """Hold every side — all at once with multi-touch, else one by one.
+
+        The two paths are NOT the same attack. Four fingers down together
+        spend the window once and all sides receive troops from the first
+        second. One finger spends the window on each side in turn, so the
+        card empties into the earlier sides first and the last side can
+        come up dry on a small army. That is the whole reason multi-touch
+        is worth root.
+        """
+        cfg = ctx.config
+        if multi_touch.available(cfg):
+            held = multi_touch.hold_all(
+                drops, self._hold_window_ms(sweep_cfg, troop), cfg,
+            )
+            if held:
+                return
+            log.warning(
+                "RingSweep: multi-touch hold failed — falling back to "
+                "one side at a time.",
+            )
+        for x, y in drops:
+            if self._interrupted(ctx):
+                return
+            # Each side gets its own randomized window, so the four
+            # presses of one attack are not identical either.
+            hold_ms = self._hold_window_ms(sweep_cfg, troop)
+            ctx.skills.touch.long_press(x, y, hold_ms, cfg, min_ms=300)
 
     def execute(self, ctx: AttackContext) -> bool:
         cfg = ctx.config
@@ -108,13 +141,7 @@ class RingSweepRule(AirAttackRule):
             )
             skills.touch.tap(card[0], card[1], cfg)
             skills.touch.pre_select_settle(cfg)
-            for x, y in drops:
-                if self._interrupted(ctx):
-                    break
-                # Each side gets its own randomized window, so the four
-                # presses of one attack are not identical either.
-                hold_ms = self._hold_window_ms(sweep_cfg, troop)
-                skills.touch.long_press(x, y, hold_ms, cfg, min_ms=300)
+            self._hold_sides(ctx, sweep_cfg, troop, drops)
             skills.touch.post_deploy_settle(cfg)
             deployed_any = True
 

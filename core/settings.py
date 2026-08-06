@@ -102,6 +102,10 @@ _DEFAULTS: dict = {
     # detecting each button. Off by default: it skips all verification.
     "hv_fast_entry": False,
 
+    # Press several spots at once instead of one after another. Needs
+    # root, so it is off by default and falls back on its own.
+    "multi_touch_enabled": False,
+
     # Vision toggles
     "skip_loot_ocr": False,
     "skip_timer_ocr": False,

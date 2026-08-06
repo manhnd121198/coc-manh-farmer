@@ -70,8 +70,14 @@
         5000,
         6000
       ],
-	  "baba":     [2000, 2100],
-	  "valkyrie":   [1000, 2000]
+      "baba": [
+        2000,
+        2100
+      ],
+      "valkyrie": [
+        1000,
+        2000
+      ]
     }
   },
   "hero_ability": {
@@ -112,5 +118,14 @@
     "ring_sweep",
     "perimeter_sweep",
     "smart_default"
-  ]
+  ],
+  "multi_touch": {
+    "_comment": "Wiring for the 'Multi-finger deploy' switch in Settings. See docs/multi-finger-deploy.md before changing anything. event_device 'auto' finds the touchscreen itself and reads raw_max from it (raw_max 0 = take the detected value). swap_xy/invert_x/invert_y map screen pixels onto the driver grid and are the ONLY values that need calibrating per device -- the docs explain how in five minutes.",
+    "event_device": "auto",
+    "raw_max": 0,
+    "swap_xy": false,
+    "invert_x": false,
+    "invert_y": false,
+    "touch_major": 60
+  }
 }
