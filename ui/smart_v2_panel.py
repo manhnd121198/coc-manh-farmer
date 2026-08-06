@@ -7,7 +7,7 @@ UI surface for the CSR (Config + Skills + Rules) attack system:
   • Rule selector (auto / smart_default / perimeter / air / ground / raid / snipe).
   • NEW: Reload Config button (hot-reload JSON files in config/).
   • NEW: Active rule indicator (shows what the orchestrator picked).
-  • Zoom-out steps + decoration wait.
+  • Decoration fade wait.
   • Target picker synced with the Asset Manager.
 """
 
@@ -19,7 +19,7 @@ from pathlib import Path
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox,
-    QComboBox, QSpinBox, QDoubleSpinBox, QFormLayout, QPushButton,
+    QComboBox, QDoubleSpinBox, QFormLayout, QPushButton,
     QFrame, QSizePolicy,
 )
 
@@ -34,6 +34,7 @@ _BUILDING_CATEGORIES = ("buildings", "builder_base", "custom")
 _RULE_OPTIONS = [
     ("Auto  — orchestrator picks the best rule", "auto"),
     ("Smart Default  — widest corridor + long-press dump",   "smart_default"),
+    ("Ring Sweep  — hold 1 điểm mỗi cạnh base (sát vùng đỏ)", "ring_sweep"),
     ("Perimeter Sweep  — random-start swipes around map",   "perimeter_sweep"),
     ("Air Attack  — fan along safest air corridor",          "air_attack"),
     ("Ground Funnel  — 2-prong funnel + main wave",          "ground_funnel"),
@@ -106,17 +107,6 @@ class SmartV2Panel(QGroupBox):
         form.addRow("V2 Rule:", self._combo_rule)
 
         zoom_row = QHBoxLayout()
-        zoom_row.addWidget(QLabel("Pinch zoom-out steps:"))
-        self._spin_zoom = QSpinBox()
-        self._spin_zoom.setRange(0, 5)
-        self._spin_zoom.setToolTip(
-            "Each step = one two-finger pinch to enlarge the view.\n"
-            "Set to 0 if multi-touch is unsupported on your emulator.",
-        )
-        self._spin_zoom.valueChanged.connect(self._emit)
-        zoom_row.addWidget(self._spin_zoom)
-
-        zoom_row.addSpacing(16)
         zoom_row.addWidget(QLabel("Decoration fade wait (s):"))
         self._spin_wait = QDoubleSpinBox()
         self._spin_wait.setRange(0.0, 15.0)
@@ -188,7 +178,7 @@ class SmartV2Panel(QGroupBox):
 
     def _load(self) -> None:
         for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_zoom, self._spin_wait):
+                  self._combo_rule, self._spin_wait):
             w.blockSignals(True)
 
         self._chk_enable.setChecked(bool(self._s.get(self._key("v2_enabled"), False)))
@@ -204,11 +194,10 @@ class SmartV2Panel(QGroupBox):
         ridx = self._combo_rule.findData(rule)
         self._combo_rule.setCurrentIndex(max(0, ridx))
 
-        self._spin_zoom.setValue(int(self._s.get("v2_zoom_out_steps", 2)))
         self._spin_wait.setValue(float(self._s.get("v2_decoration_wait", 5.0)))
 
         for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_zoom, self._spin_wait):
+                  self._combo_rule, self._spin_wait):
             w.blockSignals(False)
 
         self._on_mode_changed()
@@ -218,7 +207,6 @@ class SmartV2Panel(QGroupBox):
         self._s.set(self._key("v2_mode"),     self._combo_mode.currentData() or "smart")
         self._s.set(self._key("v2_target"),   self._combo_target.currentData() or "")
         self._s.set(self._key("v2_rule"),     self._combo_rule.currentData() or "auto")
-        self._s.set("v2_zoom_out_steps",      self._spin_zoom.value())
         self._s.set("v2_decoration_wait",     self._spin_wait.value())
         self._s.save()
 

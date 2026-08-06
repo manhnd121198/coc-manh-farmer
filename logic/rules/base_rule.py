@@ -32,6 +32,7 @@ from logic.skills.funnel_planner import FunnelPlannerSkill
 from logic.skills.hero_planner import HeroPlannerSkill
 from logic.skills.human_touch import HumanTouchSkill
 from logic.skills.perimeter_planner import PerimeterPlannerSkill
+from logic.skills.ring_sweep_planner import RingSweepPlannerSkill
 from logic.skills.spell_planner import SpellPlannerSkill
 from vision.skills.corner_selector import CornerSelectorSkill
 from vision.skills.isometric_grid import IsometricGridSkill
@@ -55,6 +56,7 @@ class SkillBundle:
     spell:      SpellPlannerSkill
     hero:       HeroPlannerSkill
     perimeter:  PerimeterPlannerSkill
+    ring:       RingSweepPlannerSkill
 
 
 @dataclass

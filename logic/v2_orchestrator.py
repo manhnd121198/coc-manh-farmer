@@ -8,10 +8,9 @@ Responsibilities:
     2. Build the Skill bundle (vision + logic).
     3. Choose the active Rule (manual override from Settings, or
        auto-detect from the army composition + target_key).
-    4. Adaptive zoom-out before vision pipelines.
-    5. Build the AttackContext (red-zone polygon, base centroid, ui
+    4. Build the AttackContext (red-zone polygon, base centroid, ui
        cutoff) and dispatch.
-    6. Stamp engine post-deploy hooks so retreat-after-deploy keeps
+    5. Stamp engine post-deploy hooks so retreat-after-deploy keeps
        working.
 
 The orchestrator is the ONLY V2 entry point. SmartV2Logic now contains
@@ -22,14 +21,12 @@ from __future__ import annotations
 
 import json
 import os
-import random
 import time
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
-from core.adb_gestures import pinch_zoom_out
 from core.adb_handler import screencap
 from core.logger import BotLogger
 from core.settings import Settings
@@ -39,6 +36,7 @@ from logic.rules import (
     AttackRule,
     GroundFunnelRule,
     PerimeterSweepRule,
+    RingSweepRule,
     ResourceRaidRule,
     SkillBundle,
     SmartDefaultRule,
@@ -50,6 +48,7 @@ from logic.skills import (
     HeroPlannerSkill,
     HumanTouchSkill,
     PerimeterPlannerSkill,
+    RingSweepPlannerSkill,
     SpellPlannerSkill,
 )
 from vision.screen_reader import ScreenReader
@@ -175,8 +174,6 @@ class V2Orchestrator:
             if ss2 is not None:
                 screenshot = ss2
 
-        screenshot = self._adaptive_zoom(screenshot, engine)
-
         ui_cutoff = self._sr.get_ui_cutoff(screenshot.shape[0])
         polygon = self._skills.red_zone.detect(
             screenshot, ui_cutoff, self._config.attack_rules,
@@ -261,6 +258,7 @@ class V2Orchestrator:
             spell    = SpellPlannerSkill(target),
             hero     = HeroPlannerSkill(),
             perimeter = PerimeterPlannerSkill(),
+            ring     = RingSweepPlannerSkill(),
         )
 
     def _build_rules(self) -> list[AttackRule]:
@@ -270,6 +268,7 @@ class V2Orchestrator:
             AirAttackRule(),
             GroundFunnelRule(),
             PerimeterSweepRule(),
+            RingSweepRule(),
             SmartDefaultRule(),
         ]
         rules.sort(key=lambda r: r.priority)
@@ -334,62 +333,6 @@ class V2Orchestrator:
             if isinstance(r, rule_class):
                 return r
         return None
-
-    def _adaptive_zoom(
-        self, screenshot: np.ndarray, engine,
-    ) -> np.ndarray:
-        cfg = self._config.attack_rules
-        target_band = cfg.get("zoom_target_red_ratio", [0.40, 0.65])
-        try:
-            lo, hi = float(target_band[0]), float(target_band[1])
-        except Exception:
-            lo, hi = 0.40, 0.65
-        if lo >= hi:
-            return screenshot
-
-        legacy_steps = int(Settings().get("v2_zoom_out_steps", 2))
-        if legacy_steps > 0:
-            for i in range(legacy_steps):
-                if self._is_interrupted(engine):
-                    return screenshot
-                pinch_zoom_out(
-                    span_px=380 + i * 40,
-                    duration_ms=550 + random.randint(-60, 60),
-                )
-                time.sleep(0.35)
-            ss2 = screencap()
-            if ss2 is not None:
-                screenshot = ss2
-
-        ui_cutoff = self._sr.get_ui_cutoff(screenshot.shape[0])
-        polygon = self._skills.red_zone.detect(screenshot, ui_cutoff, cfg)
-        if polygon is None:
-            return screenshot
-        x_min, _ = polygon.min(axis=0)
-        x_max, _ = polygon.max(axis=0)
-        ratio = float(x_max - x_min) / float(max(1, screenshot.shape[1]))
-
-        attempts = 0
-        while attempts < 2 and not self._is_interrupted(engine):
-            if ratio > hi:
-                pinch_zoom_out(span_px=420, duration_ms=550)
-                time.sleep(0.4)
-            else:
-                break
-            ss2 = screencap()
-            if ss2 is None:
-                break
-            screenshot = ss2
-            ui_cutoff = self._sr.get_ui_cutoff(screenshot.shape[0])
-            polygon = self._skills.red_zone.detect(screenshot, ui_cutoff, cfg)
-            if polygon is None:
-                break
-            x_min, _ = polygon.min(axis=0)
-            x_max, _ = polygon.max(axis=0)
-            ratio = float(x_max - x_min) / float(max(1, screenshot.shape[1]))
-            attempts += 1
-
-        return screenshot
 
     @staticmethod
     def _sleep_with_interrupt(engine, seconds: float) -> None:

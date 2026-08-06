@@ -7,6 +7,7 @@ from logic.rules.resource_raid_rule import ResourceRaidRule
 from logic.rules.th_snipe_rule import THSnipeRule
 from logic.rules.smart_default_rule import SmartDefaultRule
 from logic.rules.perimeter_sweep_rule import PerimeterSweepRule
+from logic.rules.ring_sweep_rule import RingSweepRule
 
 __all__ = [
     "AttackRule",
@@ -18,4 +19,5 @@ __all__ = [
     "THSnipeRule",
     "SmartDefaultRule",
     "PerimeterSweepRule",
+    "RingSweepRule",
 ]

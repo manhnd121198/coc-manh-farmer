@@ -25,7 +25,7 @@ from typing import Literal
 import numpy as np
 
 from core.adb_handler import screencap, tap, tap_raw
-from core.adb_gestures import pinch_zoom_out, pan_camera
+from core.adb_gestures import pan_camera
 from core.logger import BotLogger
 from core.settings import Settings
 from logic.v2_orchestrator import V2Orchestrator
@@ -90,23 +90,12 @@ class SmartV2Logic:
     def _legacy_run(self, screenshot: np.ndarray, mode: Mode, target: str) -> None:
         s = Settings()
         decoration_wait = float(s.get("v2_decoration_wait", 5.0))
-        zoom_steps = int(s.get("v2_zoom_out_steps", 2))
 
         log.info("LEGACY V36 START mode=%s key=%s target=%s", mode, self._mode_key, target or "—")
 
         ss = self._vision.wait_for_decorations(decoration_wait)
         if ss is None:
             ss = screenshot
-
-        for i in range(max(0, zoom_steps)):
-            if self._interrupted():
-                return
-            pinch_zoom_out(span_px=380 + i * 40, duration_ms=550 + random.randint(-60, 60))
-            time.sleep(0.35)
-        if zoom_steps > 0:
-            ss2 = screencap()
-            if ss2 is not None:
-                ss = ss2
 
         if mode == "building":
             self._attack_building(ss, target)

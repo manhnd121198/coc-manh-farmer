@@ -33,7 +33,7 @@ class PerimeterSweepRule(AirAttackRule):
             log.info("PerimeterSweep: four safe map edges are not available.")
             return False
 
-        duration_ms = int(sweep_cfg.get("swipe_duration_ms", 280))
+        steps_per_leg = max(1, int(sweep_cfg.get("deploy_steps_per_leg", 3)))
         deployed_any = False
         hero_drop = perimeter[0]
 
@@ -59,13 +59,10 @@ class PerimeterSweepRule(AirAttackRule):
             )
             skills.touch.tap(card[0], card[1], cfg)
             skills.touch.pre_select_settle(cfg)
-            for index, start in enumerate(route):
-                if self._interrupted(ctx):
-                    break
-                end = route[(index + 1) % len(route)]
-                skills.touch.quick_swipe(
-                    start[0], start[1], end[0], end[1], duration_ms, cfg,
-                )
+            if not self._interrupted(ctx):
+                # Hold, then drag. A plain swipe pans the camera and deploys
+                # nothing, so the whole lap is one continuous press-and-drag.
+                skills.touch.deploy_path(list(route) + [route[0]], cfg, steps_per_leg)
             skills.touch.post_deploy_settle(cfg)
             deployed_any = True
 

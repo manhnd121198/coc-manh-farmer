@@ -1,61 +1,28 @@
 """
-Multi-finger gestures and human-like camera helpers for Smart Vision V2.
+Human-like camera helpers for Smart Vision V2.
 
-ADB single-shell `input swipe` cannot natively produce a real two-finger
-pinch. We approximate it by issuing TWO simultaneous swipes from two
-threads — most modern Android emulators (BlueStacks, MEmu, LDPlayer,
-Genymotion) honor this as a true multi-touch gesture. If a particular
-device does not, the V2 panel exposes a setting to disable the pinch
-step gracefully.
+There is no pinch-zoom here, and there cannot be one over plain ADB. A
+pinch needs two pointers down at the same time, and every single-pointer
+tool the shell has refuses to supply them: ``input swipe`` fired from two
+threads is two INDEPENDENT one-finger drags (CoC pans the camera instead
+of zooming — measured on this device, the base spanned 868px before two
+"pinches" and 867px after), and ``input motionevent`` carries one pointer
+per event with no POINTER_DOWN.
+
+The real multi-touch route — writing MT protocol B events straight to the
+touchscreen node — is closed too: /dev/input/event9 is
+``u:object_r:input_device:s0`` and SELinux is Enforcing, so ``sendevent``
+from the shell user gets "Permission denied" even though it is in the
+``input`` group. That needs root or an injected app running with
+``UiAutomation``.
 """
 
-import random
-import threading
 import time
 
-from core.adb_handler import _run, swipe, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT
+from core.adb_handler import swipe, get_active_resolution
 from core.logger import BotLogger
 
 log = BotLogger.get("gestures")
-
-
-def _swipe_raw(sx: int, sy: int, ex: int, ey: int, dur: int) -> None:
-    _run(["shell", "input", "swipe", str(sx), str(sy), str(ex), str(ey), str(dur)])
-
-
-def pinch_zoom_out(
-    center_x: int | None = None,
-    center_y: int | None = None,
-    span_px: int = 380,
-    duration_ms: int = 600,
-) -> None:
-    """Two-finger pinch INWARD (which CoC interprets as zoom OUT).
-
-    The two swipes start far apart and slide toward the center, run on
-    separate threads so they overlap in time on the device.
-    """
-    cx = center_x if center_x is not None else DEFAULT_SCREEN_WIDTH // 2
-    cy = center_y if center_y is not None else DEFAULT_SCREEN_HEIGHT // 2
-
-    span = max(120, span_px)
-    j = random.randint(-15, 15)
-
-    a_start = (max(40, cx - span + j), cy + random.randint(-25, 25))
-    a_end   = (cx - 30, cy)
-    b_start = (min(DEFAULT_SCREEN_WIDTH - 40, cx + span - j), cy + random.randint(-25, 25))
-    b_end   = (cx + 30, cy)
-
-    dur_a = duration_ms + random.randint(-60, 60)
-    dur_b = duration_ms + random.randint(-60, 60)
-
-    log.debug("PINCH-OUT center=(%d,%d) span=%d dur=%dms", cx, cy, span, duration_ms)
-
-    t1 = threading.Thread(target=_swipe_raw, args=(*a_start, *a_end, dur_a), daemon=True)
-    t2 = threading.Thread(target=_swipe_raw, args=(*b_start, *b_end, dur_b), daemon=True)
-    t1.start(); t2.start()
-    t1.join(timeout=duration_ms / 1000 + 2.0)
-    t2.join(timeout=duration_ms / 1000 + 2.0)
-    time.sleep(0.25)
 
 
 def pan_camera(
@@ -71,8 +38,9 @@ def pan_camera(
     that direction (i.e., contents move opposite). Slow + jitter so the
     motion looks human rather than instant teleportation.
     """
-    cx = center_x if center_x is not None else DEFAULT_SCREEN_WIDTH // 2
-    cy = center_y if center_y is not None else DEFAULT_SCREEN_HEIGHT // 2
+    scr_w, scr_h = get_active_resolution()
+    cx = center_x if center_x is not None else scr_w // 2
+    cy = center_y if center_y is not None else scr_h // 2
     d = max(100, distance_px)
 
     if direction == "up":
@@ -85,6 +53,11 @@ def pan_camera(
         sx, sy, ex, ey = cx - d // 2, cy, cx + d // 2, cy
     else:
         return
+
+    # Keep every endpoint on-screen: on narrow devices (e.g. 1350x1080) a
+    # half-distance offset from centre can otherwise fall outside the panel.
+    sx = max(0, min(sx, scr_w - 1)); ex = max(0, min(ex, scr_w - 1))
+    sy = max(0, min(sy, scr_h - 1)); ey = max(0, min(ey, scr_h - 1))
 
     swipe(sx, sy, ex, ey, duration_ms=duration_ms)
     time.sleep(0.20)
