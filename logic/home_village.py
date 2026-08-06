@@ -20,6 +20,7 @@ from core.state_machine import StateMachine, GameState
 from core.settings import Settings
 from vision.screen_reader import ScreenReader
 from vision.ocr_reader import OCRReader
+from logic import fast_entry
 from logic.smart_v2_logic import SmartV2Logic
 
 log = BotLogger.get("home_village")
@@ -82,6 +83,11 @@ class HomeVillageLogic:
         sequence = self._profile.get("hv_entry_sequence", [])
         if sequence and self._engine:
             self._engine.execute_attack_sequence(sequence)
+        elif fast_entry.is_available():
+            # Blind-taps Attack -> Find a Match -> Attack!. Skips ~13s of
+            # screencap + detect_state; the next engine tick re-reads the
+            # screen, so a swallowed tap costs one attempt, not the run.
+            fast_entry.run(self._is_interrupted)
         else:
             m = self._sr.find_template_by_name(screenshot, "attack_button")
             if m: tap(m[0], m[1])
