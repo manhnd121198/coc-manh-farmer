@@ -22,6 +22,7 @@ from PyQt5.QtGui import QFont
 from core.logger import BotLogger
 from ui.styles import DARK_THEME_QSS
 from ui.main_window import MainWindow
+from ui import wheel_guard
 
 
 def main() -> None:
@@ -41,6 +42,9 @@ def main() -> None:
     # 3. Apply global dark theme
     app.setStyleSheet(DARK_THEME_QSS)
     log.info("Dark theme applied.")
+
+    # 3b. The wheel must scroll the page, not edit whatever it passes over
+    wheel_guard.install(app)
 
     # 4. Set a clean default font
     font = QFont("Segoe UI", 11)
