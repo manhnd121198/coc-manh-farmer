@@ -1,12 +1,12 @@
 {
-  "min_gold": 400000,
-  "min_elixir": 400000,
-  "min_dark_elixir": 4000,
+  "min_gold": 0,
+  "min_elixir": 0,
+  "min_dark_elixir": 0,
   "auto_retreat_enabled": false,
   "retreat_heroes_dead": false,
-  "retreat_gold": 500000,
-  "retreat_elixir": 520000,
-  "retreat_dark_elixir": 5000,
+  "retreat_gold": 0,
+  "retreat_elixir": 0,
+  "retreat_dark_elixir": 0,
   "retreat_time": 0,
   "deploy_timer_enabled": true,
   "deploy_timer_seconds": 100,
@@ -14,8 +14,8 @@
   "attack_strategy": "smart_target",
   "macro_file": "",
   "selected_troops": [
-    "electro_dragon",
-    "balloon"
+    "baba",
+    "valkyrie"
   ],
   "selected_heroes": [
     "grand_warden",
@@ -23,10 +23,7 @@
     "barbarian_king",
     "royal_champion"
   ],
-  "selected_spells": [
-    "freeze_spell",
-    "rage_spell"
-  ],
+  "selected_spells": [],
   "bb_attack_mode": "ranked",
   "bb_attack_strategy": "smart_target",
   "bb_macro_file": "",

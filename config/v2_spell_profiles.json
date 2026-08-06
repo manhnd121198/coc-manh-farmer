@@ -38,7 +38,7 @@
                          "target_priority": ["x_bow", "scattershot"], "drop_count": 1},
   "totem_spell":        {"placement": "inside_base_ring", "timing": "after_engage",
                          "ring_radius_min": 0.65, "ring_radius_max": 0.85,
-                         "drop_count": 100,
-                         "drops_per_wave": 20, "wave_interval_sec": 18,
-                         "drop_interval_ms": 150}
+                         "drop_count": 40,
+                         "drops_per_wave": 20, "wave_interval_sec": 6,
+                         "drop_interval_ms": 0}
 }
