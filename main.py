@@ -51,13 +51,23 @@ def main() -> None:
         os.makedirs(d, exist_ok=True)
     log.info("Asset directories verified.")
 
-    # 5b. Verify ADB binary presence
-    if not os.path.isfile("2adb.exe"):
-        log.critical("2adb.exe not found in project root.")
+    # 5b. Verify ADB binary presence (cross-platform)
+    from core.adb_handler import ADB_EXE
+    import shutil as _shutil
+
+    adb_ok = os.path.isfile(ADB_EXE) or _shutil.which(ADB_EXE) is not None
+    if not adb_ok:
+        log.critical("ADB binary not found (resolved to %r).", ADB_EXE)
+        if sys.platform == "win32":
+            hint = ("2adb.exe was not found in the project root.\n"
+                    "Place 2adb.exe next to main.py before running the bot.")
+        else:
+            hint = ("'adb' was not found on your PATH.\n\n"
+                    "macOS:  brew install android-platform-tools\n"
+                    "Or set COC_ADB_PATH=/full/path/to/adb")
         QMessageBox.critical(
             None, "Missing ADB",
-            "2adb.exe was not found in the project root.\n"
-            "Place 2adb.exe next to main.py before running the bot.\n\n"
+            f"{hint}\n\n"
             "The UI will still open so you can configure settings,\n"
             "but device commands will fail until ADB is present.",
         )

@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from core.settings import Settings, PRESETS
+from logic import fast_entry
 
 _PRESET_ORDER = ["ultra", "high", "medium", "low", "smart_default"]
 
@@ -127,6 +128,24 @@ class SettingsTab(QWidget):
         self._chk_skip_timer.stateChanged.connect(self._on_value_changed)
         vis_lay.addWidget(self._chk_skip_timer)
 
+        self._chk_fast_entry = QCheckBox(
+            f"Fast entry — blind-tap Attack / Find a Match / Attack! "
+            f"({fast_entry.calibrated_label()} only)",
+        )
+        self._chk_fast_entry.setToolTip(
+            "Taps the three start-of-attack buttons at fixed coordinates\n"
+            "instead of detecting each one, saving roughly 13 seconds per\n"
+            "attack (screencap ~1.0s + detect_state ~1.8s per button).\n\n"
+            "Nothing is verified while it runs, so an ad or an unexpected\n"
+            "popup will swallow a tap and waste that attempt — the next\n"
+            "tick re-reads the screen and recovers.\n\n"
+            f"The coordinates are raw pixels measured on "
+            f"{fast_entry.calibrated_label()};\n"
+            "on any other resolution this is ignored automatically.",
+        )
+        self._chk_fast_entry.stateChanged.connect(self._on_value_changed)
+        vis_lay.addWidget(self._chk_fast_entry)
+
         # Thresholds
         thr_row = QHBoxLayout()
         thr_row.addWidget(QLabel("Troop conf:"))
@@ -140,10 +159,24 @@ class SettingsTab(QWidget):
 
         thr_row.addWidget(QLabel("UI conf:"))
         self._spin_ui_thr = QDoubleSpinBox()
-        self._spin_ui_thr.setRange(0.40, 0.99)
+        # Floor at 0.70. Lowering this does NOT make detection more willing —
+        # it makes every template match everything. Measured over the seven
+        # game screens: 0.70-0.99 identifies all seven, 0.55 gets three (the
+        # loot label scores 0.57 on the home screen and hijacks it to
+        # IN_BATTLE), and 0.40 reports DISCONNECTED on every screen because
+        # the connection-error template matches anywhere.
+        self._spin_ui_thr.setRange(0.70, 0.99)
         self._spin_ui_thr.setSingleStep(0.05)
         self._spin_ui_thr.setDecimals(2)
-        self._spin_ui_thr.setToolTip("UI button matching confidence")
+        self._spin_ui_thr.setToolTip(
+            "UI button matching confidence.\n\n"
+            "A real button scores ~0.91-1.00; unrelated screens peak around\n"
+            "0.70. Lowering this past 0.70 makes templates match the wrong\n"
+            "screen — at 0.55 the home village reads as IN_BATTLE, at 0.40\n"
+            "everything reads as DISCONNECTED.\n\n"
+            "If a button is missed, re-capture it in the Asset Manager\n"
+            "instead of lowering this.",
+        )
         self._spin_ui_thr.valueChanged.connect(self._on_value_changed)
         thr_row.addWidget(self._spin_ui_thr)
 
@@ -310,6 +343,7 @@ class SettingsTab(QWidget):
         # Vision
         self._chk_skip_loot.setChecked(s.get("skip_loot_ocr"))
         self._chk_skip_timer.setChecked(s.get("skip_timer_ocr"))
+        self._chk_fast_entry.setChecked(bool(s.get("hv_fast_entry", False)))
         self._spin_troop_thr.setValue(s.get("vision_troop_threshold"))
         self._spin_ui_thr.setValue(s.get("vision_ui_threshold"))
         self._spin_building_thr.setValue(s.get("vision_building_threshold"))
@@ -340,6 +374,7 @@ class SettingsTab(QWidget):
         s.set("tick_interval", self._spin_tick.value())
         s.set("skip_loot_ocr", self._chk_skip_loot.isChecked())
         s.set("skip_timer_ocr", self._chk_skip_timer.isChecked())
+        s.set("hv_fast_entry", self._chk_fast_entry.isChecked())
         s.set("vision_troop_threshold", self._spin_troop_thr.value())
         s.set("vision_ui_threshold", self._spin_ui_thr.value())
         s.set("vision_building_threshold", self._spin_building_thr.value())

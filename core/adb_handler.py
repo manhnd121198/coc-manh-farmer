@@ -18,6 +18,7 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -36,7 +37,31 @@ TOUCH_MAX_Y = 4095
 DEFAULT_SCREEN_WIDTH = 2340
 DEFAULT_SCREEN_HEIGHT = 1080
 
-ADB_EXE = "2adb.exe"
+def _resolve_adb() -> str:
+    """Pick the ADB binary for the current OS.
+
+    Order of preference:
+      1. ``COC_ADB_PATH`` env var (explicit override, any OS).
+      2. Bundled ``2adb.exe`` next to main.py — Windows only.
+      3. ``adb`` from PATH (macOS / Linux, e.g. brew android-platform-tools).
+
+    Keeps the original Windows behaviour untouched while letting the bot
+    run on macOS/Linux where ``2adb.exe`` cannot execute.
+    """
+    override = os.environ.get("COC_ADB_PATH", "").strip()
+    if override:
+        return override
+
+    bundled = "2adb.exe"
+    if sys.platform == "win32":
+        return bundled
+
+    # POSIX: the Windows .exe is not runnable — use system adb.
+    found = shutil.which("adb")
+    return found or "adb"
+
+
+ADB_EXE = _resolve_adb()
 
 # Fixed humanization bounds (NOT tunables — purely for shape of randomness).
 # All TUNABLE values come from Settings() at call time.
@@ -207,10 +232,39 @@ def get_screen_density() -> int:
         return _active_screen_density
 
 
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def _repair_png_bytes(raw: bytes) -> bytes:
+    """Undo ADB's CRLF translation ONLY when it actually happened.
+
+    Legacy ``adb shell`` on Windows rewrites every ``\\n`` as ``\\r\\n``,
+    which corrupts binary PNG data, so the classic workaround is to
+    replace CRLF with LF. But modern adb on macOS/Linux performs NO
+    translation — applying that replace unconditionally destroys the
+    legitimate ``\\r\\n`` inside the PNG signature itself and makes
+    ``cv2.imdecode`` fail ("screencap decode failed").
+
+    So: detect the mangling instead of guessing by platform.
+    """
+    if raw.startswith(_PNG_SIGNATURE):
+        return raw  # Already clean — leave the bytes untouched.
+    repaired = raw.replace(b"\r\n", b"\n")
+    if repaired.startswith(_PNG_SIGNATURE):
+        return repaired  # Was CRLF-translated (legacy Windows adb).
+    return raw  # Neither — let the decoder report the real problem.
+
+
 def screencap() -> np.ndarray | None:
     try:
-        raw = _run_raw(["shell", "screencap", "-p"], timeout=10)
-        raw = raw.replace(b"\r\n", b"\n")
+        # ``exec-out`` is binary-safe and never applies CRLF translation.
+        # Fall back to ``shell`` for very old adb builds lacking exec-out.
+        raw = _run_raw(["exec-out", "screencap", "-p"], timeout=10)
+        if not raw.startswith(_PNG_SIGNATURE):
+            legacy = _run_raw(["shell", "screencap", "-p"], timeout=10)
+            if legacy:
+                raw = legacy
+        raw = _repair_png_bytes(raw)
         img_array = np.frombuffer(raw, dtype=np.uint8)
         if img_array.size == 0:
             log.warning("screencap returned empty buffer, device might be disconnected.")

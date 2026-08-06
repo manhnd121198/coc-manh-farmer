@@ -244,10 +244,15 @@ class RedZonePolygonSkill:
                       mode, ratio)
             return False
 
-        # Minimum tile width — a TH13+ base at fair zoom is at least
-        # ~600 px wide. Anything smaller is a fragment of dashes that
-        # leaked through the morph close.
-        min_w = int(cfg.get("min_polygon_width_px", 500))
+        # Minimum base width. The configured value is an ABSOLUTE pixel
+        # count tuned on a 1920-wide screen (500px ≈ 26% of the width). On a
+        # narrower panel such as 1350x1080 that same 500px would demand 37%
+        # of the screen and reject perfectly valid bases, so scale the gate
+        # down proportionally. Screens at/above 1920 keep the exact old
+        # threshold.
+        min_w_cfg = int(cfg.get("min_polygon_width_px", 500))
+        width_ratio = float(cfg.get("min_polygon_width_ratio", 500.0 / 1920.0))
+        min_w = min(min_w_cfg, int(w * width_ratio))
         if bw < min_w:
             log.debug("RedZone (%s) sanity FAIL: width %d < %d.", mode, bw, min_w)
             return False

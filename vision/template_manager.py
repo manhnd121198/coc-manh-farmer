@@ -124,14 +124,60 @@ def _ensure_dirs() -> None:
 def _load_manifest() -> dict:
     if MANIFEST_FILE.exists():
         with open(MANIFEST_FILE, "r", encoding="utf-8") as fh:
-            return json.load(fh)
+            data = json.load(fh)
+        return _normalize_manifest_paths(data)
     return {}
+
+
+def _normalize_manifest_paths(data: dict) -> dict:
+    """Make Windows-authored ``file`` paths usable on macOS/Linux.
+
+    The manifest is generated on Windows and stores paths like
+    ``assets\\templates\\troops\\dragon.png``. On POSIX a backslash is a
+    literal filename character, so every ``os.path.isfile()`` check fails
+    and NO template loads at all.
+
+    The conversion is done on COPIES of the entries: the caller must never
+    be able to write these POSIX paths back into manifest.json, which
+    would rewrite a file that Windows owns. Returns a new dict; the
+    on-disk manifest is left byte-identical.
+    """
+    if os.sep == "\\":
+        return data  # On Windows the stored paths are already correct.
+    out: dict = {}
+    for key, meta in data.items():
+        if isinstance(meta, dict):
+            f = meta.get("file")
+            if isinstance(f, str) and "\\" in f:
+                meta = {**meta, "file": f.replace("\\", "/")}
+        out[key] = meta
+    return out
 
 
 def _save_manifest(data: dict) -> None:
     _ensure_dirs()
     with open(MANIFEST_FILE, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2)
+        json.dump(_denormalize_manifest_paths(data), fh, indent=2)
+
+
+def _denormalize_manifest_paths(data: dict) -> dict:
+    """Inverse of :func:`_normalize_manifest_paths`.
+
+    manifest.json is Windows-canonical (backslash separators) because the
+    asset pipeline runs there. Loading on POSIX converts to ``/`` so the
+    files resolve; saving converts back, so a macOS/Linux run never
+    rewrites all 43 entries and produces a spurious diff.
+    """
+    if os.sep == "\\":
+        return data  # Windows already stores the canonical form.
+    out: dict = {}
+    for key, meta in data.items():
+        if isinstance(meta, dict):
+            f = meta.get("file")
+            if isinstance(f, str) and "/" in f:
+                meta = {**meta, "file": f.replace("/", "\\")}
+        out[key] = meta
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -146,13 +192,26 @@ def save_template(name: str, image: np.ndarray, category: str = "misc") -> str:
     cv2.imwrite(str(filepath), image)
 
     manifest = _load_manifest()
-    manifest[name] = {
+    entry = {
         "category": category,
         "label": name.replace("_", " ").title(),
         "file": str(filepath),
         "width": image.shape[1],
         "height": image.shape[0],
     }
+    # Record the screen the crop came from. The matcher needs it to derive
+    # the exact UI scale on a device of a different width — CoC lays its HUD
+    # out across the screen width, and the correlation peak is sharp enough
+    # that a few percent of scale error hides the button completely.
+    try:
+        from core.adb_handler import get_active_resolution
+
+        screen_w, screen_h = get_active_resolution()
+        entry["screen_w"], entry["screen_h"] = screen_w, screen_h
+    except Exception as exc:  # resolution unknown — better absent than wrong
+        log.warning("Could not record capture resolution for '%s': %s", name, exc)
+
+    manifest[name] = entry
     _save_manifest(manifest)
     log.info("Template saved: '%s' -> %s (%dx%d)", name, filepath, image.shape[1], image.shape[0])
     return str(filepath)

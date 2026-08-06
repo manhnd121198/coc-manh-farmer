@@ -17,6 +17,7 @@ import numpy as np
 from core.logger import BotLogger
 from core.state_machine import GameState
 from core.settings import Settings
+from core.adb_handler import DEFAULT_SCREEN_WIDTH
 from vision.template_manager import get_template_path, DEFAULT_ASSETS, _load_manifest
 
 log = BotLogger.get("vision")
@@ -54,6 +55,23 @@ Y_CLAMP_MIN = 120
 CLAMP_PAD = 40
 
 
+def _template_src_width(name: str) -> int | None:
+    """Screen width the template was captured on, if the manifest records it.
+
+    Templates captured through the Asset Manager store ``screen_w`` so the
+    matcher can derive the exact UI scale instead of guessing from a bundled
+    default. Older entries have no such field.
+    """
+    entry = _load_manifest().get(name)
+    if not entry:
+        return None
+    try:
+        value = int(entry.get("screen_w") or 0)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 def _get_troops_bar_size() -> tuple[int, int] | None:
     """(width, height) of the captured troops-bar template, or None."""
     manifest = _load_manifest()
@@ -64,7 +82,12 @@ def _get_troops_bar_size() -> tuple[int, int] | None:
 
 
 class ScreenReader:
-    _template_cache: dict[str, tuple[np.ndarray, np.ndarray | None, str]] = {}
+    _template_cache: dict[str, tuple[np.ndarray, np.ndarray | None, str, float | None]] = {}
+
+    # Scale at which a UI template last matched. The HUD scale is constant
+    # for a given device, so reusing it keeps later frames to one or two
+    # matchTemplate passes instead of re-walking the whole ladder.
+    _ui_scale_hint: float | None = None
 
     @staticmethod
     def get_ui_cutoff(screen_height: int) -> int:
@@ -216,11 +239,23 @@ class ScreenReader:
         return points, (base_cx, base_cy)
 
     def _get_cached_template(self, name: str) -> tuple[np.ndarray, np.ndarray | None, str] | None:
-        if name in self._template_cache:
-            return self._template_cache[name]
-
         path = get_template_path(name)
         if path is None or not os.path.isfile(path): return None
+
+        # Re-capturing a template while the bot runs must take effect
+        # immediately. Caching by name alone kept serving the stale image,
+        # which silently broke matching (a template captured on another
+        # resolution scores far below threshold, so the bot just idles).
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            mtime = None
+
+        entry = self._template_cache.get(name)
+        if entry is not None and entry[3] == mtime:
+            return entry[0], entry[1], entry[2]
+        if entry is not None:
+            log.info("Template '%s' changed on disk — reloading.", name)
 
         if name in DEFAULT_ASSETS:
             category = DEFAULT_ASSETS[name][0]
@@ -247,7 +282,7 @@ class ScreenReader:
                 bgr = raw[:, :, :3]
                 mask = None
 
-            self._template_cache[name] = (bgr, mask, category)
+            self._template_cache[name] = (bgr, mask, category, mtime)
             return bgr, mask, category
         except Exception as exc:
             log.warning("Template load failed for %s: %s", name, exc)
@@ -275,19 +310,55 @@ class ScreenReader:
             log.debug("OpenCV raw_match exception: %s", exc)
             return -1.0, (0, 0), (0, 0)
 
-    def _match_ui(self, screenshot: np.ndarray, tmpl_bgr: np.ndarray, threshold: float) -> tuple[int, int, float] | None:
+    def _match_ui(
+        self, screenshot: np.ndarray, tmpl_bgr: np.ndarray, threshold: float,
+        src_width: int | None = None,
+    ) -> tuple[int, int, float] | None:
         try:
             h, w = screenshot.shape[:2]
             gray_ss = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
             gray_t = cv2.cvtColor(tmpl_bgr, cv2.COLOR_BGR2GRAY)
 
-            rel_scale = max(0.4, h / 1080.0)
-            base_scales = [1.0, round(rel_scale, 2), round(rel_scale * 0.85, 2), round(rel_scale * 1.15, 2), round(rel_scale * 1.30, 2)]
-            ui_scales = sorted(list(set([s for s in base_scales if 0.3 <= s <= 2.5])))
+            # CoC lays its HUD out across the screen WIDTH, so a template
+            # captured on a `src_width`-wide screen appears at
+            # ``w / src_width`` here — height plays no part.
+            #
+            # The correlation peak is sharp: on a 1350-wide panel a button
+            # scored 0.94 at scale 0.550 but only 0.57 at 0.635. So when the
+            # capture width is recorded, search a tight ±5% around the exact
+            # ratio; a wider ladder does not help and actively hurts, because
+            # shrinking a native template turns it into a small coloured blob
+            # that cross-matches unrelated buttons.
+            #
+            # Without a recorded capture width the bundled default is only a
+            # guess (the shipped set mixes several source devices), so widen
+            # the bracket and keep 1.0 in front for anything re-captured on
+            # this device.
+            ui_scales: list[float] = []
+            seen: set[float] = set()
+
+            def _add(value: float) -> None:
+                s = round(value, 3)
+                if 0.3 <= s <= 2.5 and s not in seen:
+                    seen.add(s)
+                    ui_scales.append(s)
+
+            if src_width and src_width > 0:
+                exact = w / float(src_width)
+                for k in (1.0, 0.95, 1.05):
+                    _add(exact * k)
+            else:
+                _add(1.0)
+                if ScreenReader._ui_scale_hint is not None:
+                    _add(ScreenReader._ui_scale_hint)
+                rel_scale = max(0.3, min(2.5, w / float(DEFAULT_SCREEN_WIDTH)))
+                for k in (1.0, 0.95, 1.05, 0.90, 1.10):
+                    _add(rel_scale * k)
 
             best_val = -1.0
             best_loc = (0, 0)
             best_dims = (gray_t.shape[0], gray_t.shape[1])
+            best_scale = 1.0
 
             for scale in ui_scales:
                 if abs(scale - 1.0) < 0.02:
@@ -305,8 +376,15 @@ class ScreenReader:
                     best_val = val
                     best_loc = loc
                     best_dims = dims
+                    best_scale = scale
+                # Stop at the first scale that clears the bar. detect_state
+                # runs a dozen templates per frame, so scanning every scale
+                # after a confident hit only burns matchTemplate passes.
+                if best_val >= threshold:
+                    break
 
             if best_val >= threshold:
+                ScreenReader._ui_scale_hint = best_scale
                 cx = best_loc[0] + best_dims[1] // 2
                 cy = best_loc[1] + best_dims[0] // 2
                 return cx, cy, best_val
@@ -468,7 +546,9 @@ class ScreenReader:
             result = self._match_building(screenshot, tmpl_bgr, tmpl_mask, thr)
         else:
             thr = threshold if threshold is not None else _ui_thr()
-            result = self._match_ui(screenshot, tmpl_bgr, thr)
+            result = self._match_ui(
+                screenshot, tmpl_bgr, thr, _template_src_width(template_name),
+            )
 
         return (result[0], result[1]) if result else None
 
@@ -502,10 +582,22 @@ class ScreenReader:
         if f(screenshot, "bb_return_home", 0.80):    return GameState.BATTLE_ENDED
         if f(screenshot, "bb_battle_result", 0.80):  return GameState.BATTLE_ENDED
 
-        # The "LOT ASSESET SHIELD" is a last-resort home-village hint;
-        # we only honour it AFTER the CONFIRMING dialog has been ruled out
-        # and at a sane confidence so it never misfires on the dialog.
-        if f(screenshot, "lot_asseset", 0.35):       return GameState.IN_BATTLE
+        # The "Available Loot" panel is on screen while scouting and while
+        # attacking. It must be judged at the normal UI confidence: at 0.35
+        # it also matched the battle-result screen (0.43) and reported
+        # IN_BATTLE there, so the bot kept hunting for a surrender button
+        # instead of taking "Return Home".
+        # Surrender first: it is the only battle marker drawn on the HUD
+        # panel rather than over the enemy's terrain, so it is the one that
+        # does not change with the base. Measured on a live attack it scores
+        # 1.00 in battle against 0.64 on the scouting screen and 0.55 on the
+        # multiplayer menu, whereas the loot label — whose crop necessarily
+        # includes whatever grass and trees sit behind it, plus loot numbers
+        # that fall as buildings break — peaked at 0.74 and dipped under the
+        # bar mid-attack. That dip is what left the bot sitting in UNKNOWN
+        # while its troops were already fighting.
+        if f(screenshot, "surrender_button"):        return GameState.IN_BATTLE
+        if f(screenshot, "lot_asseset"):             return GameState.IN_BATTLE
         if f(screenshot, "end_battle_button", 0.80): return GameState.IN_BATTLE
         if f(screenshot, "timer_top_start", 0.75):   return GameState.IN_BATTLE
         
@@ -529,9 +621,11 @@ class ScreenReader:
         if f(screenshot, "searching_indicator"):     return GameState.SEARCHING
 
         # Multi-heuristic Home Village detection (scenery-immune & tablet-adaptive)
+        # One check at the normal confidence. The old 0.42 retry matched the
+        # attack menu (0.47) and any similar orange panel, so UNKNOWN screens
+        # were reported as HOME and the caller tapped home-screen coordinates.
         if f(screenshot, "attack_button"):           return GameState.HOME
-        if f(screenshot, "attack_button", 0.42):      return GameState.HOME
-        if f(screenshot, "shop_button", 0.42) or f(screenshot, "shop", 0.42):
+        if f(screenshot, "shop_button") or f(screenshot, "shop"):
             return GameState.HOME
 
         return GameState.UNKNOWN
