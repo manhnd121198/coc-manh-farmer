@@ -88,29 +88,29 @@ class HomeVillageTab(QWidget):
         layout = QVBoxLayout(container)
         layout.setSpacing(10)
 
-        hdr = QLabel("Home Village — Advanced Farming Configuration")
+        hdr = QLabel("Làng chính — Cấu hình cày tài nguyên")
         hdr.setFont(QFont("Segoe UI", 14, QFont.Bold))
         layout.addWidget(hdr)
 
         # ── Loot Thresholds ─────────────────────────────────────────────
-        loot_group = QGroupBox("Attack Thresholds")
+        loot_group = QGroupBox("Ngưỡng tài nguyên để đánh")
         loot_grid = QGridLayout()
 
-        loot_grid.addWidget(QLabel("Min Gold:"), 0, 0)
+        loot_grid.addWidget(QLabel("Vàng tối thiểu:"), 0, 0)
         self._min_gold = QSpinBox()
         self._min_gold.setRange(0, 5_000_000)
         self._min_gold.setSingleStep(50000)
         self._min_gold.setValue(200000)
         loot_grid.addWidget(self._min_gold, 0, 1)
 
-        loot_grid.addWidget(QLabel("Min Elixir:"), 0, 2)
+        loot_grid.addWidget(QLabel("Elixir tối thiểu:"), 0, 2)
         self._min_elixir = QSpinBox()
         self._min_elixir.setRange(0, 5_000_000)
         self._min_elixir.setSingleStep(50000)
         self._min_elixir.setValue(200000)
         loot_grid.addWidget(self._min_elixir, 0, 3)
 
-        loot_grid.addWidget(QLabel("Min DE:"), 1, 0)
+        loot_grid.addWidget(QLabel("Elixir đen tối thiểu:"), 1, 0)
         self._min_dark = QSpinBox()
         self._min_dark.setRange(0, 500_000)
         self._min_dark.setSingleStep(500)
@@ -121,56 +121,55 @@ class HomeVillageTab(QWidget):
         layout.addWidget(loot_group)
 
         # ── Auto-Retreat Systems ───────────────────────────────────
-        retreat_group = QGroupBox("Tactical Retreat Systems")
+        retreat_group = QGroupBox("Tự động rút quân")
         retreat_layout = QGridLayout()
 
-        self._retreat_enabled = QCheckBox("Retreat on Low Remaining Loot")
+        self._retreat_enabled = QCheckBox("Rút khi tài nguyên còn lại quá ít")
         self._retreat_enabled.setChecked(False)
         retreat_layout.addWidget(self._retreat_enabled, 0, 0, 1, 2)
 
-        self._retreat_heroes = QCheckBox("Retreat if Warden + 1 Hero Dies")
+        self._retreat_heroes = QCheckBox("Rút khi Warden và 1 hero nữa chết")
         self._retreat_heroes.setChecked(False)
         self._retreat_heroes.setStyleSheet("color: #e9b44c; font-weight: bold;")
         retreat_layout.addWidget(self._retreat_heroes, 0, 2, 1, 2)
 
-        retreat_layout.addWidget(QLabel("Retreat Gold ≤"), 1, 0)
+        retreat_layout.addWidget(QLabel("Rút khi vàng còn ≤"), 1, 0)
         self._retreat_gold = QSpinBox()
         self._retreat_gold.setRange(0, 5_000_000)
         self._retreat_gold.setSingleStep(10000)
         self._retreat_gold.setValue(50000)
         retreat_layout.addWidget(self._retreat_gold, 1, 1)
 
-        retreat_layout.addWidget(QLabel("Retreat Elixir ≤"), 1, 2)
+        retreat_layout.addWidget(QLabel("Rút khi elixir còn ≤"), 1, 2)
         self._retreat_elixir = QSpinBox()
         self._retreat_elixir.setRange(0, 5_000_000)
         self._retreat_elixir.setSingleStep(10000)
         self._retreat_elixir.setValue(50000)
         retreat_layout.addWidget(self._retreat_elixir, 1, 3)
 
-        retreat_layout.addWidget(QLabel("Retreat DE ≤"), 2, 0)
+        retreat_layout.addWidget(QLabel("Rút khi elixir đen còn ≤"), 2, 0)
         self._retreat_dark = QSpinBox()
         self._retreat_dark.setRange(0, 500_000)
         self._retreat_dark.setSingleStep(100)
         self._retreat_dark.setValue(500)
         retreat_layout.addWidget(self._retreat_dark, 2, 1)
 
-        retreat_layout.addWidget(QLabel("Retreat if Time Remaining ≤ (s):"), 3, 0)
+        retreat_layout.addWidget(QLabel("Rút khi thời gian còn ≤ (giây):"), 3, 0)
         self._retreat_time = QSpinBox()
         self._retreat_time.setRange(0, 180)
         self._retreat_time.setValue(0)
-        self._retreat_time.setToolTip("Set to 0 to disable. Example: 30 will surrender at 30s left.")
+        self._retreat_time.setToolTip("Để 0 là tắt. Ví dụ 30: còn 30 giây thì đầu hàng.")
         retreat_layout.addWidget(self._retreat_time, 3, 1)
 
         # ── NEW: Post-Deployment Timer (silent end-of-battle countdown) ──
-        self._deploy_timer_enabled = QCheckBox("End battle automatically after troops/heroes are deployed")
+        self._deploy_timer_enabled = QCheckBox("Tự kết thúc trận sau khi thả hết quân và hero")
         self._deploy_timer_enabled.setToolTip(
-            "Once the bot finishes dropping the army, it counts the seconds\n"
-            "silently in the background and surrenders the battle when the\n"
-            "countdown ends. Useful for quick farms.",
+            "Thả xong quân là bot bắt đầu đếm ngược ngầm, hết giờ thì\n"
+            "đầu hàng luôn. Hợp với kiểu cày nhanh, không chờ hết trận.",
         )
         retreat_layout.addWidget(self._deploy_timer_enabled, 4, 0, 1, 4)
 
-        retreat_layout.addWidget(QLabel("End after deployment (s):"), 5, 0)
+        retreat_layout.addWidget(QLabel("Đếm ngược sau khi thả (giây):"), 5, 0)
         self._deploy_timer_seconds = QSpinBox()
         self._deploy_timer_seconds.setRange(5, 300)
         self._deploy_timer_seconds.setSingleStep(5)
@@ -181,42 +180,42 @@ class HomeVillageTab(QWidget):
         layout.addWidget(retreat_group)
 
         # ── Attack Mode ───────────────────────────────────────
-        mode_group = QGroupBox("Attack Mode")
+        mode_group = QGroupBox("Kiểu đánh")
         mode_layout = QHBoxLayout()
 
-        mode_layout.addWidget(QLabel("Match Type:"))
+        mode_layout.addWidget(QLabel("Loại trận:"))
         self._match_mode = QComboBox()
-        self._match_mode.addItems(["⚔  Normal", "🏆  Ranked"])
+        self._match_mode.addItems(["⚔  Thường", "🏆  Xếp hạng"])
         self._match_mode.setToolTip(
-            "Pick which Mode button the bot taps after pressing Attack:\n"
-            "  • Normal  → normal_mode_btn\n"
-            "  • Ranked  → ranked_mode_btn",
+            "Sau khi bấm Attack, bot sẽ bấm nút chế độ nào:\n"
+            "  • Thường     → normal_mode_btn\n"
+            "  • Xếp hạng   → ranked_mode_btn",
         )
         mode_layout.addWidget(self._match_mode)
 
         mode_layout.addSpacing(16)
 
-        mode_layout.addWidget(QLabel("Mode:"))
+        mode_layout.addWidget(QLabel("Chế độ:"))
         self._attack_mode = QComboBox()
-        self._attack_mode.addItems(["Smart Vision AI", "Playback Recorded Macro"])
+        self._attack_mode.addItems(["Smart Vision AI", "Phát lại thao tác đã ghi"])
         self._attack_mode.currentIndexChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self._attack_mode)
 
-        self._macro_label = QLabel("Macro:")
+        self._macro_label = QLabel("Thao tác:")
         self._macro_label.hide()
         mode_layout.addWidget(self._macro_label)
 
-        self._macro_path_label = QLabel("(none)")
+        self._macro_path_label = QLabel("(chưa chọn)")
         self._macro_path_label.setStyleSheet("color: #9e9e9e;")
         self._macro_path_label.hide()
         mode_layout.addWidget(self._macro_path_label)
 
-        self._macro_pick_btn = QPushButton("📂  Browse…")
+        self._macro_pick_btn = QPushButton("📂  Chọn tệp…")
         self._macro_pick_btn.hide()
         self._macro_pick_btn.clicked.connect(self._pick_macro)
         mode_layout.addWidget(self._macro_pick_btn)
 
-        self._record_btn = QPushButton("🔴  Record Macro")
+        self._record_btn = QPushButton("🔴  Ghi thao tác")
         self._record_btn.setMinimumHeight(32)
         self._record_btn.clicked.connect(self._toggle_recording)
         mode_layout.addWidget(self._record_btn)
@@ -229,21 +228,21 @@ class HomeVillageTab(QWidget):
         # ── Lists (Drag & Drop) ───────────────────────────────────────
         lists_layout = QHBoxLayout()
 
-        troop_box = QGroupBox("Troops (Drag to Reorder)")
+        troop_box = QGroupBox("Quân (kéo để đổi thứ tự)")
         tv = QVBoxLayout()
         self._troop_list = _OrderableList()
         tv.addWidget(self._troop_list)
         troop_box.setLayout(tv)
         lists_layout.addWidget(troop_box)
 
-        hero_box = QGroupBox("Heroes (Drag to Reorder)")
+        hero_box = QGroupBox("Hero (kéo để đổi thứ tự)")
         hv = QVBoxLayout()
         self._hero_list = _OrderableList()
         hv.addWidget(self._hero_list)
         hero_box.setLayout(hv)
         lists_layout.addWidget(hero_box)
 
-        spell_box = QGroupBox("Spells (Drag to Reorder)")
+        spell_box = QGroupBox("Phép (kéo để đổi thứ tự)")
         sv = QVBoxLayout()
         self._spell_list = _OrderableList()
         sv.addWidget(self._spell_list)
@@ -259,13 +258,13 @@ class HomeVillageTab(QWidget):
 
         # ── Action Buttons ──────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        self._start_btn = QPushButton("▶  Start Farming")
+        self._start_btn = QPushButton("▶  Bắt đầu cày")
         self._start_btn.setObjectName("start_button")
         self._start_btn.setMinimumHeight(40)
         self._start_btn.clicked.connect(self.start_requested.emit)
         btn_row.addWidget(self._start_btn)
 
-        self._stop_btn = QPushButton("■  Stop")
+        self._stop_btn = QPushButton("■  Dừng")
         self._stop_btn.setObjectName("stop_button")
         self._stop_btn.setMinimumHeight(40)
         self._stop_btn.setEnabled(False)
@@ -303,13 +302,13 @@ class HomeVillageTab(QWidget):
     def _toggle_recording(self) -> None:
         if not self._recording:
             self._recording = True
-            self._record_btn.setText("⏹  Stop Recording")
+            self._record_btn.setText("⏹  Dừng ghi")
             self._record_btn.setObjectName("stop_button")
             self._record_btn.setStyle(self._record_btn.style())
             start_recording()
         else:
             self._recording = False
-            self._record_btn.setText("🔴  Record Macro")
+            self._record_btn.setText("🔴  Ghi thao tác")
             self._record_btn.setObjectName("")
             self._record_btn.setStyle(self._record_btn.style())
             events = stop_recording()

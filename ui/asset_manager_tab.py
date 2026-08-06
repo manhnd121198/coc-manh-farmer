@@ -131,7 +131,7 @@ class _CaptureCanvas(QLabel):
 class CaptureDialog(QDialog):
     def __init__(self, asset_key: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Capture: {asset_key}")
+        self.setWindowTitle(f"Chụp mẫu: {asset_key}")
         self.setMinimumSize(800, 550)
         self._asset_key = asset_key
         self._crop: np.ndarray | None = None
@@ -139,10 +139,10 @@ class CaptureDialog(QDialog):
         self._canvas = _CaptureCanvas()
         self._canvas.region_selected.connect(self._on_region)
         layout.addWidget(self._canvas)
-        self._info = QLabel("Click 'Take Screenshot' then draw a bounding box.")
+        self._info = QLabel("Bấm 'Chụp màn hình' rồi khoanh một khung.")
         layout.addWidget(self._info)
         btn_row = QHBoxLayout()
-        snap = QPushButton("📷  Take Screenshot")
+        snap = QPushButton("📷  Chụp màn hình")
         snap.clicked.connect(self._snap)
         btn_row.addWidget(snap)
         btn_row.addStretch()
@@ -156,10 +156,10 @@ class CaptureDialog(QDialog):
     def _snap(self):
         img = screencap()
         if img is None:
-            QMessageBox.warning(self, "Error", "Screenshot failed.")
+            QMessageBox.warning(self, "Lỗi", "Chụp màn hình thất bại.")
             return
         self._canvas.set_image(img)
-        self._info.setText("Draw a red bounding box around the target.")
+        self._info.setText("Khoanh khung đỏ quanh phần tử cần lấy.")
 
     def _on_region(self, x, y, w, h):
         self._crop = self._canvas.get_crop(x, y, w, h)
@@ -199,7 +199,7 @@ class AssetManagerTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
-        hdr = QLabel("Asset Manager — Map game elements (fully dynamic)")
+        hdr = QLabel("Ảnh mẫu — Khai báo các phần tử trong game")
         hdr.setObjectName("header_label")
         layout.addWidget(hdr)
 
@@ -210,12 +210,12 @@ class AssetManagerTab(QWidget):
 
         # ── Add / Delete Custom Asset buttons ───────────────────────────
         custom_row = QHBoxLayout()
-        add_btn = QPushButton("➕  Add Custom Asset")
+        add_btn = QPushButton("➕  Thêm ảnh mẫu mới")
         add_btn.setMinimumHeight(32)
         add_btn.clicked.connect(self._add_custom_asset)
         custom_row.addWidget(add_btn)
 
-        del_btn = QPushButton("🗑  Delete Asset Definition")
+        del_btn = QPushButton("🗑  Xoá khai báo ảnh mẫu")
         del_btn.setMinimumHeight(32)
         del_btn.clicked.connect(self._delete_asset_definition)
         custom_row.addWidget(del_btn)
@@ -251,31 +251,31 @@ class AssetManagerTab(QWidget):
         right.setMaximumWidth(380)
         right_layout = QVBoxLayout(right)
 
-        self._preview = QLabel("No preview")
+        self._preview = QLabel("Chưa có ảnh")
         self._preview.setAlignment(Qt.AlignCenter)
         self._preview.setMinimumHeight(150)
         self._preview.setStyleSheet("border: 1px solid #0f3460; background: #0d0d1a;")
         right_layout.addWidget(self._preview)
 
-        self._selected_label = QLabel("Select an asset from the tree.")
+        self._selected_label = QLabel("Chọn một mục ở danh sách bên trái.")
         self._selected_label.setWordWrap(True)
         right_layout.addWidget(self._selected_label)
 
-        actions = QGroupBox("Actions")
+        actions = QGroupBox("Thao tác")
         al = QVBoxLayout()
-        self._capture_btn = QPushButton("📷  Capture from Screen")
+        self._capture_btn = QPushButton("📷  Chụp từ màn hình")
         self._capture_btn.setMinimumHeight(36)
         self._capture_btn.setEnabled(False)
         self._capture_btn.clicked.connect(self._on_capture)
         al.addWidget(self._capture_btn)
 
-        self._upload_btn = QPushButton("📂  Upload Image File")
+        self._upload_btn = QPushButton("📂  Tải ảnh từ máy")
         self._upload_btn.setMinimumHeight(36)
         self._upload_btn.setEnabled(False)
         self._upload_btn.clicked.connect(self._on_upload)
         al.addWidget(self._upload_btn)
 
-        self._delete_btn = QPushButton("🗑  Remove Template Image")
+        self._delete_btn = QPushButton("🗑  Xoá ảnh mẫu")
         self._delete_btn.setMinimumHeight(34)
         self._delete_btn.setEnabled(False)
         self._delete_btn.clicked.connect(self._on_delete)
@@ -284,7 +284,7 @@ class AssetManagerTab(QWidget):
         actions.setLayout(al)
         right_layout.addWidget(actions)
 
-        refresh_btn = QPushButton("🔄  Refresh Checklist")
+        refresh_btn = QPushButton("🔄  Nạp lại danh sách")
         refresh_btn.clicked.connect(self._refresh_tree)
         right_layout.addWidget(refresh_btn)
 
@@ -395,8 +395,8 @@ class AssetManagerTab(QWidget):
             self._capture_btn.setEnabled(False)
             self._upload_btn.setEnabled(False)
             self._delete_btn.setEnabled(False)
-            self._selected_label.setText("Select an asset.")
-            self._preview.setText("No preview")
+            self._selected_label.setText("Chọn một mục.")
+            self._preview.setText("Chưa có ảnh")
             self._preview.setPixmap(QPixmap())
             return
 
@@ -425,9 +425,9 @@ class AssetManagerTab(QWidget):
             if img is not None:
                 self._show_preview(img)
             else:
-                self._preview.setText("(file missing)")
+                self._preview.setText("(thiếu tệp ảnh)")
         else:
-            self._preview.setText("Not yet mapped")
+            self._preview.setText("Chưa khai báo ảnh")
             self._preview.setPixmap(QPixmap())
 
     # ═══════════════════════════════════════════════════════════════════
@@ -436,8 +436,8 @@ class AssetManagerTab(QWidget):
 
     def _add_custom_asset(self):
         name, ok = QInputDialog.getText(
-            self, "Add Custom Asset",
-            "Enter asset key (lowercase, underscores, e.g. 'super_archer'):",
+            self, "Thêm ảnh mẫu mới",
+            "Nhập mã ảnh mẫu (chữ thường, dùng gạch dưới, ví dụ 'super_archer'):",
         )
         if not ok or not name.strip():
             return
@@ -445,15 +445,15 @@ class AssetManagerTab(QWidget):
 
         cats = [c.replace("_", " ").title() for c in VALID_CATEGORIES]
         cat, ok2 = QInputDialog.getItem(
-            self, "Category", "Select category:", cats, 0, False,
+            self, "Nhóm", "Chọn nhóm:", cats, 0, False,
         )
         if not ok2:
             return
         cat_key = VALID_CATEGORIES[cats.index(cat)]
 
         label, ok3 = QInputDialog.getText(
-            self, "Display Label",
-            "Human-readable label (e.g. 'Super Archer'):",
+            self, "Tên hiển thị",
+            "Tên dễ đọc (ví dụ 'Super Archer'):",
             text=name.replace("_", " ").title(),
         )
         if not ok3 or not label.strip():
@@ -461,19 +461,19 @@ class AssetManagerTab(QWidget):
 
         register_asset(name, cat_key, label.strip())
         log.info("Custom asset added: '%s' in '%s'.", name, cat_key)
-        QMessageBox.information(self, "Added", f"Asset '{name}' registered in '{cat}'.")
+        QMessageBox.information(self, "Đã thêm", f"Đã thêm '{name}' vào nhóm '{cat}'.")
         self._refresh_tree()
         self.assets_changed.emit()
 
     def _delete_asset_definition(self):
         key = self._selected_key
         if not key:
-            QMessageBox.information(self, "No Selection", "Select an asset first.")
+            QMessageBox.information(self, "Chưa chọn", "Chọn một mục trước đã.")
             return
         reply = QMessageBox.question(
-            self, "Delete Asset",
-            f"Permanently delete '{key}' from the manifest?\n"
-            "This also removes the template image if present.",
+            self, "Xoá ảnh mẫu",
+            f"Xoá hẳn '{key}' khỏi danh sách?\n"
+            "Ảnh mẫu kèm theo (nếu có) cũng bị xoá.",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
@@ -499,7 +499,7 @@ class AssetManagerTab(QWidget):
             crop = dlg.get_crop()
             if crop is not None:
                 save_template(key, crop, category)
-                QMessageBox.information(self, "Saved", f"'{label}' captured!")
+                QMessageBox.information(self, "Đã lưu", f"Đã chụp '{label}'.")
                 self._refresh_tree()
                 self.assets_changed.emit()
 
@@ -518,11 +518,11 @@ class AssetManagerTab(QWidget):
         if path:
             dest = import_template_from_file(key, path, category)
             if dest:
-                QMessageBox.information(self, "Imported", f"'{label}' imported!")
+                QMessageBox.information(self, "Đã nhập", f"Đã nhập '{label}'.")
                 self._refresh_tree()
                 self.assets_changed.emit()
             else:
-                QMessageBox.warning(self, "Error", "Import failed.")
+                QMessageBox.warning(self, "Lỗi", "Nhập ảnh thất bại.")
 
     def _on_delete(self):
         key = self._selected_key
@@ -532,7 +532,7 @@ class AssetManagerTab(QWidget):
         if key not in catalogue:
             return
         _, label, _ = catalogue[key]
-        if QMessageBox.question(self, "Remove Image", f"Remove image for '{label}'?",
+        if QMessageBox.question(self, "Xoá ảnh", f"Xoá ảnh mẫu của '{label}'?",
                                 QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
             delete_template(key)
             self._refresh_tree()

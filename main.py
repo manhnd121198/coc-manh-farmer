@@ -63,17 +63,17 @@ def main() -> None:
     if not adb_ok:
         log.critical("ADB binary not found (resolved to %r).", ADB_EXE)
         if sys.platform == "win32":
-            hint = ("2adb.exe was not found in the project root.\n"
-                    "Place 2adb.exe next to main.py before running the bot.")
+            hint = ("Không tìm thấy 2adb.exe trong thư mục dự án.\n"
+                    "Đặt 2adb.exe cạnh main.py rồi chạy lại bot.")
         else:
-            hint = ("'adb' was not found on your PATH.\n\n"
+            hint = ("Không tìm thấy 'adb' trên PATH.\n\n"
                     "macOS:  brew install android-platform-tools\n"
-                    "Or set COC_ADB_PATH=/full/path/to/adb")
+                    "Hoặc đặt COC_ADB_PATH=/duong/dan/toi/adb")
         QMessageBox.critical(
-            None, "Missing ADB",
+            None, "Thiếu ADB",
             f"{hint}\n\n"
-            "The UI will still open so you can configure settings,\n"
-            "but device commands will fail until ADB is present.",
+            "Giao diện vẫn mở được để bạn chỉnh cài đặt, nhưng mọi lệnh\n"
+            "điều khiển thiết bị sẽ lỗi cho tới khi có ADB.",
         )
 
     # 6. Launch the main window

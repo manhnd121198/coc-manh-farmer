@@ -32,14 +32,14 @@ log = BotLogger.get("v2_panel")
 _BUILDING_CATEGORIES = ("buildings", "builder_base", "custom")
 
 _RULE_OPTIONS = [
-    ("Auto  — orchestrator picks the best rule", "auto"),
-    ("Smart Default  — widest corridor + long-press dump",   "smart_default"),
+    ("Auto  — bot tự chọn cách đánh hợp nhất", "auto"),
+    ("Mặc định  — tìm hành lang rộng nhất rồi giữ thả",      "smart_default"),
     ("Ring Sweep  — hold 1 điểm mỗi cạnh base (sát vùng đỏ)", "ring_sweep"),
-    ("Perimeter Sweep  — random-start swipes around map",   "perimeter_sweep"),
-    ("Air Attack  — fan along safest air corridor",          "air_attack"),
-    ("Ground Funnel  — 2-prong funnel + main wave",          "ground_funnel"),
-    ("Resource Raid  — scout each storage, then dump",       "resource_raid"),
-    ("TH Snipe  — closest safe corridor to target building", "th_snipe"),
+    ("Quét viền  — vuốt quanh map, điểm bắt đầu ngẫu nhiên", "perimeter_sweep"),
+    ("Đánh không quân  — dàn theo hành lang bay an toàn",    "air_attack"),
+    ("Bộ binh mở phễu  — 2 mũi mở đường rồi thả đợt chính",  "ground_funnel"),
+    ("Cướp tài nguyên  — dò từng kho rồi thả",               "resource_raid"),
+    ("Bắn tỉa TH  — hành lang an toàn gần công trình đích",  "th_snipe"),
 ]
 
 
@@ -67,11 +67,11 @@ class SmartV2Panel(QGroupBox):
     def _init_ui(self) -> None:
         root = QVBoxLayout(self)
 
-        self._chk_enable = QCheckBox("Enable V2 (Red-Zone-Aware Smart Deploy)")
+        self._chk_enable = QCheckBox("Bật V2 (thả quân né vùng đỏ)")
         self._chk_enable.setToolTip(
-            "When ON, this village uses the V2 CSR planner. The legacy\n"
-            "V36 flow remains as ULTIMATE FALLBACK if the orchestrator\n"
-            "fails. Independent per village.",
+            "Bật thì làng này dùng bộ lập kế hoạch V2. Nếu V2 không\n"
+            "chạy được thì tự rơi về luồng V36 cũ. Cài riêng cho\n"
+            "từng làng.",
         )
         self._chk_enable.stateChanged.connect(self._emit)
         root.addWidget(self._chk_enable)
@@ -79,43 +79,43 @@ class SmartV2Panel(QGroupBox):
         form = QFormLayout()
 
         self._combo_mode = QComboBox()
-        self._combo_mode.addItem("Smart  (no specific target)",         "smart")
-        self._combo_mode.addItem("Building  (closest safe spot)",       "building")
-        self._combo_mode.addItem("Storage  (scout + dump nearest)",     "storage")
+        self._combo_mode.addItem("Thông minh  (không nhắm mục tiêu)",   "smart")
+        self._combo_mode.addItem("Nhắm công trình  (chỗ an toàn gần nhất)", "building")
+        self._combo_mode.addItem("Nhắm kho  (dò rồi thả gần nhất)",     "storage")
         self._combo_mode.currentIndexChanged.connect(self._on_mode_changed)
-        form.addRow("Strategy:", self._combo_mode)
+        form.addRow("Cách đánh:", self._combo_mode)
 
         self._combo_target = QComboBox()
         self._combo_target.setMinimumWidth(260)
         self._combo_target.setToolTip(
-            "Synced with the Asset Manager. Pick a building (or its\n"
-            "level variant) — the bot will aim at the closest one on\n"
-            "screen and deploy on the nearest safe tile next to it.",
+            "Đồng bộ với tab Ảnh mẫu. Chọn một công trình (hoặc bản\n"
+            "theo cấp) — bot nhắm cái gần nhất trên màn hình rồi thả\n"
+            "quân ở ô an toàn sát bên.",
         )
         self._combo_target.currentIndexChanged.connect(self._emit)
-        form.addRow("Target:", self._combo_target)
+        form.addRow("Mục tiêu:", self._combo_target)
 
         self._combo_rule = QComboBox()
         for label, value in _RULE_OPTIONS:
             self._combo_rule.addItem(label, value)
         self._combo_rule.setToolTip(
-            "Manual rule override. 'Auto' lets the orchestrator pick the\n"
-            "best rule based on your selected troops + target.\n"
-            "Override only if you want to force a specific strategy.",
+            "Ép dùng một cách đánh cố định. 'Auto' để bot tự chọn theo\n"
+            "quân và mục tiêu bạn đã set. Chỉ ép khi muốn bắt buộc\n"
+            "đánh theo một kiểu.",
         )
         self._combo_rule.currentIndexChanged.connect(self._emit)
-        form.addRow("V2 Rule:", self._combo_rule)
+        form.addRow("Luật V2:", self._combo_rule)
 
         zoom_row = QHBoxLayout()
-        zoom_row.addWidget(QLabel("Decoration fade wait (s):"))
+        zoom_row.addWidget(QLabel("Chờ vật trang trí mờ đi (giây):"))
         self._spin_wait = QDoubleSpinBox()
         self._spin_wait.setRange(0.0, 15.0)
         self._spin_wait.setSingleStep(0.5)
         self._spin_wait.setDecimals(1)
         self._spin_wait.setToolTip(
-            "Time to wait AFTER loot scan before re-screencapping for\n"
-            "deployment planning. Enemy decorations fade after a few\n"
-            "seconds so the safe-line detection becomes accurate.",
+            "Sau khi đọc tài nguyên thì chờ bấy nhiêu giây rồi mới chụp\n"
+            "lại màn hình để tính chỗ thả. Vật trang trí của đối thủ mờ\n"
+            "dần sau vài giây, chờ xong thì nhận vùng đỏ mới chuẩn.",
         )
         self._spin_wait.valueChanged.connect(self._emit)
         zoom_row.addWidget(self._spin_wait)
@@ -126,22 +126,22 @@ class SmartV2Panel(QGroupBox):
         sep.setFrameShadow(QFrame.Sunken)
 
         cfg_row = QHBoxLayout()
-        self._lbl_cfg_status = QLabel("Config: ready (config/v2_*.json)")
+        self._lbl_cfg_status = QLabel("Config: sẵn sàng (config/v2_*.json)")
         self._lbl_cfg_status.setStyleSheet("color: #c0c0c0;")
         self._lbl_cfg_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         cfg_row.addWidget(self._lbl_cfg_status)
 
-        self._btn_reload = QPushButton("Reload Config")
+        self._btn_reload = QPushButton("Nạp lại config")
         self._btn_reload.setToolTip(
-            "Hot-reload the V2 JSON config files (config/v2_*.json) in the\n"
-            "running orchestrator without restarting the bot.",
+            "Nạp lại các file config/v2_*.json vào bot đang chạy,\n"
+            "không cần khởi động lại.",
         )
         self._btn_reload.clicked.connect(self._on_reload_config)
         cfg_row.addWidget(self._btn_reload)
 
-        self._btn_open = QPushButton("Open Config Folder")
+        self._btn_open = QPushButton("Mở thư mục config")
         self._btn_open.setToolTip(
-            "Open the config/ folder in your OS file explorer to edit\n"
+            "Mở thư mục config/ trong trình quản lý tệp để sửa\n"
             "v2_attack_rules.json / v2_troop_profiles.json / v2_spell_profiles.json.",
         )
         self._btn_open.clicked.connect(self._on_open_config_folder)
@@ -157,7 +157,7 @@ class SmartV2Panel(QGroupBox):
         prev = self._combo_target.currentData()
         self._combo_target.blockSignals(True)
         self._combo_target.clear()
-        self._combo_target.addItem("(none)", "")
+        self._combo_target.addItem("(không)", "")
         seen: set[str] = set()
         for category in _BUILDING_CATEGORIES:
             for key, label, has_image in list_assets_by_category(category):

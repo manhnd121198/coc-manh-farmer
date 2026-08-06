@@ -40,7 +40,7 @@ DEFAULT_PROFILE = os.path.join(PROFILES_DIR, "default_profile.json")
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("CoC Bot V6 — Clash of Clans Automation")
+        self.setWindowTitle("CoC Bot V6 — Tự động Clash of Clans")
         self.setMinimumSize(1200, 800)
         self.resize(1440, 920)
 
@@ -60,7 +60,7 @@ class MainWindow(QMainWindow):
         toolbar.setStyleSheet("QToolBar { spacing: 10px; padding: 4px; }")
         self.addToolBar(toolbar)
 
-        self._adb_label = QLabel("● ADB: Unknown")
+        self._adb_label = QLabel("● ADB: Chưa rõ")
         self._adb_label.setStyleSheet("color: #9e9e9e; font-weight: bold; padding: 0 12px;")
         toolbar.addWidget(self._adb_label)
         toolbar.addSeparator()
@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         toolbar.addWidget(spacer)
 
-        self._ready_label = QLabel("❌ Assets Not Ready")
+        self._ready_label = QLabel("❌ Thiếu ảnh mẫu")
         self._ready_label.setObjectName("ready_pill_bad")
         toolbar.addWidget(self._ready_label)
         toolbar.addSeparator()
@@ -119,12 +119,12 @@ class MainWindow(QMainWindow):
 
         self._settings_tab = SettingsTab()
 
-        self._tabs.addTab(self._home_tab,     "🏠  Home Village")
-        self._tabs.addTab(self._bb_tab,       "🔨  Builder Base")
-        self._tabs.addTab(self._asset_tab,    "📋  Asset Manager")
-        self._tabs.addTab(self._seq_tab,      "🔗  Sequences")
-        self._tabs.addTab(self._training_tab, "🎯  Training Mode")
-        self._tabs.addTab(self._settings_tab, "⚙  Settings")
+        self._tabs.addTab(self._home_tab,     "🏠  Làng chính")
+        self._tabs.addTab(self._bb_tab,       "🔨  Làng thợ")
+        self._tabs.addTab(self._asset_tab,    "📋  Ảnh mẫu")
+        self._tabs.addTab(self._seq_tab,      "🔗  Chuỗi thao tác")
+        self._tabs.addTab(self._training_tab, "🎯  Ghi thao tác")
+        self._tabs.addTab(self._settings_tab, "⚙  Cài đặt")
 
         self.setCentralWidget(self._tabs)
 
@@ -174,10 +174,10 @@ class MainWindow(QMainWindow):
     def _on_readiness_changed(self, ready: bool) -> None:
         self._assets_ready = ready
         if ready:
-            self._ready_label.setText("✅ Assets Ready")
+            self._ready_label.setText("✅ Đủ ảnh mẫu")
             self._ready_label.setObjectName("ready_pill_ok")
         else:
-            self._ready_label.setText("❌ Assets Not Ready")
+            self._ready_label.setText("❌ Thiếu ảnh mẫu")
             self._ready_label.setObjectName("ready_pill_bad")
         # Re-apply stylesheet so the new objectName selector takes effect.
         self._ready_label.setStyle(self._ready_label.style())
@@ -297,7 +297,7 @@ class MainWindow(QMainWindow):
 
         self._start_act.setEnabled(False)
         self._stop_act.setEnabled(True)
-        self._adb_label.setText("● ADB: Running")
+        self._adb_label.setText("● ADB: Đang chạy")
         self._adb_label.setStyleSheet("color: #4caf50; font-weight: bold; padding: 0 12px;")
         self.statusBar().showMessage(f"Bot running — {mode}")
 
@@ -315,7 +315,7 @@ class MainWindow(QMainWindow):
         self._stop_act.setEnabled(False)
         self._home_tab.set_running_state(False)
         self._bb_tab.set_running_state(False)
-        self._adb_label.setText("● ADB: Idle")
+        self._adb_label.setText("● ADB: Nghỉ")
         self._adb_label.setStyleSheet("color: #e9b44c; font-weight: bold; padding: 0 12px;")
         self.statusBar().showMessage("Bot stopped.")
 
@@ -331,7 +331,7 @@ class MainWindow(QMainWindow):
     def _on_help_needed(self, screenshot, reason: str = "") -> None:
         """Called on the main thread via signal. Shows the assist dialog."""
         self.statusBar().showMessage("⚠  Bot PAUSED — needs your help!")
-        self._adb_label.setText("● PAUSED")
+        self._adb_label.setText("● TẠM DỪNG")
         self._adb_label.setStyleSheet("color: #e94560; font-weight: bold; padding: 0 12px;")
 
         dlg = InteractiveAssistDialog(screenshot, self, reason=reason)
@@ -341,7 +341,7 @@ class MainWindow(QMainWindow):
         if self._engine:
             self._engine.handle_assist_result(action, data)
 
-        self._adb_label.setText("● ADB: Running")
+        self._adb_label.setText("● ADB: Đang chạy")
         self._adb_label.setStyleSheet("color: #4caf50; font-weight: bold; padding: 0 12px;")
         self.statusBar().showMessage("Bot resumed after assist.")
 

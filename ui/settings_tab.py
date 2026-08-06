@@ -43,16 +43,16 @@ class SettingsTab(QWidget):
         root.setSpacing(16)
 
         # ── Header ──────────────────────────────────────────────────────
-        hdr = QLabel("⚙  Settings")
+        hdr = QLabel("⚙  Cài đặt")
         hdr.setObjectName("header_label")
         root.addWidget(hdr)
 
         # ── Performance Profile ─────────────────────────────────────────
-        perf_grp = QGroupBox("Performance Profile")
+        perf_grp = QGroupBox("Cấu hình hiệu năng")
         perf_lay = QVBoxLayout(perf_grp)
 
         row1 = QHBoxLayout()
-        row1.addWidget(QLabel("Preset:"))
+        row1.addWidget(QLabel("Mức:"))
         self._combo_preset = QComboBox()
         for key in _PRESET_ORDER:
             self._combo_preset.addItem(PRESETS[key]["label"], key)
@@ -68,11 +68,11 @@ class SettingsTab(QWidget):
         root.addWidget(perf_grp)
 
         # ── ADB Tap Speed ───────────────────────────────────────────────
-        adb_grp = QGroupBox("ADB Tap Speed")
+        adb_grp = QGroupBox("Tốc độ bấm ADB")
         adb_lay = QVBoxLayout(adb_grp)
 
         r2 = QHBoxLayout()
-        r2.addWidget(QLabel("Min delay (s):"))
+        r2.addWidget(QLabel("Nghỉ tối thiểu (giây):"))
         self._spin_tap_min = QDoubleSpinBox()
         self._spin_tap_min.setRange(0.005, 0.500)
         self._spin_tap_min.setSingleStep(0.005)
@@ -80,7 +80,7 @@ class SettingsTab(QWidget):
         self._spin_tap_min.valueChanged.connect(self._on_value_changed)
         r2.addWidget(self._spin_tap_min)
 
-        r2.addWidget(QLabel("Max delay (s):"))
+        r2.addWidget(QLabel("Nghỉ tối đa (giây):"))
         self._spin_tap_max = QDoubleSpinBox()
         self._spin_tap_max.setRange(0.010, 1.000)
         self._spin_tap_max.setSingleStep(0.005)
@@ -90,14 +90,14 @@ class SettingsTab(QWidget):
         adb_lay.addLayout(r2)
 
         r3 = QHBoxLayout()
-        r3.addWidget(QLabel("Swipe duration (ms):"))
+        r3.addWidget(QLabel("Thời gian vuốt (ms):"))
         self._spin_swipe = QSpinBox()
         self._spin_swipe.setRange(500, 5000)
         self._spin_swipe.setSingleStep(100)
         self._spin_swipe.valueChanged.connect(self._on_value_changed)
         r3.addWidget(self._spin_swipe)
 
-        r3.addWidget(QLabel("Tick interval (s):"))
+        r3.addWidget(QLabel("Chu kỳ vòng lặp (giây):"))
         self._spin_tick = QDoubleSpinBox()
         self._spin_tick.setRange(0.2, 5.0)
         self._spin_tick.setSingleStep(0.1)
@@ -109,73 +109,72 @@ class SettingsTab(QWidget):
         root.addWidget(adb_grp)
 
         # ── Vision Toggles ──────────────────────────────────────────────
-        vis_grp = QGroupBox("Vision Engine")
+        vis_grp = QGroupBox("Nhận diện hình ảnh")
         vis_lay = QVBoxLayout(vis_grp)
 
-        self._chk_skip_loot = QCheckBox("Skip Loot OCR (لا يقرأ اللوت — faster)")
+        self._chk_skip_loot = QCheckBox("Bỏ qua đọc tài nguyên (nhanh hơn)")
         self._chk_skip_loot.setToolTip(
-            "Enable this to skip reading Gold/Elixir/Dark Elixir.\n"
-            "The bot will attack every base without checking loot.",
+            "Bật thì bot không đọc Vàng/Elixir/Elixir đen nữa,\n"
+            "gặp base nào cũng đánh, không xét tài nguyên.",
         )
         self._chk_skip_loot.stateChanged.connect(self._on_value_changed)
         vis_lay.addWidget(self._chk_skip_loot)
 
-        self._chk_skip_timer = QCheckBox("Skip Timer OCR (لا يقرأ المؤقت)")
+        self._chk_skip_timer = QCheckBox("Bỏ qua đọc đồng hồ trận")
         self._chk_skip_timer.setToolTip(
-            "Enable this to skip reading the battle timer.\n"
-            "Timer-based retreat will be disabled.",
+            "Bật thì bot không đọc đồng hồ đếm ngược trong trận.\n"
+            "Tính năng rút quân theo thời gian sẽ không hoạt động.",
         )
         self._chk_skip_timer.stateChanged.connect(self._on_value_changed)
         vis_lay.addWidget(self._chk_skip_timer)
 
         self._chk_fast_entry = QCheckBox(
-            f"Fast entry — blind-tap Attack / Find a Match / Attack! "
-            f"({fast_entry.calibrated_label()} only)",
+            f"Vào trận nhanh — bấm mù Attack / Find a Match / Attack! "
+            f"(chỉ cho {fast_entry.calibrated_label()})",
         )
         self._chk_fast_entry.setToolTip(
-            "Taps the three start-of-attack buttons at fixed coordinates\n"
-            "instead of detecting each one, saving roughly 13 seconds per\n"
-            "attack (screencap ~1.0s + detect_state ~1.8s per button).\n\n"
-            "Nothing is verified while it runs, so an ad or an unexpected\n"
-            "popup will swallow a tap and waste that attempt — the next\n"
-            "tick re-reads the screen and recovers.\n\n"
-            f"The coordinates are raw pixels measured on "
-            f"{fast_entry.calibrated_label()};\n"
-            "on any other resolution this is ignored automatically.",
+            "Bấm thẳng vào toạ độ ba nút vào trận thay vì chụp màn hình\n"
+            "nhận diện từng nút, tiết kiệm khoảng 13 giây mỗi trận\n"
+            "(mỗi nút tốn ~1.0s chụp + ~1.8s nhận diện).\n\n"
+            "Lúc chạy không kiểm tra gì cả, nên nếu có quảng cáo hay\n"
+            "thông báo lạ chen vào thì nó nuốt mất một cú bấm và hỏng\n"
+            "lượt đó — vòng lặp sau bot đọc lại màn hình và tự gỡ.\n\n"
+            f"Toạ độ đo trên màn {fast_entry.calibrated_label()};\n"
+            "độ phân giải khác thì tính năng này tự tắt.",
         )
         self._chk_fast_entry.stateChanged.connect(self._on_value_changed)
         vis_lay.addWidget(self._chk_fast_entry)
 
         self._chk_multi_touch = QCheckBox(
-            "Multi-finger deploy — press every spot at once (needs root)",
+            "Thả nhiều ngón — bấm tất cả các điểm cùng lúc (cần root)",
         )
         self._chk_multi_touch.setToolTip(
-            "Ring Sweep normally holds one side of the base at a time, so\n"
-            "the card drains into the earlier sides and a small army can\n"
-            "leave the last side empty. With this on, all four spots are\n"
-            "pressed together and the army splits between them.\n\n"
-            "It writes touch events straight to the touchscreen device,\n"
-            "which SELinux only allows as root — plain ADB cannot put two\n"
-            "fingers down at all. Without root it turns itself off and the\n"
-            "one-at-a-time behaviour is used instead.\n\n"
-            "The device node and axis orientation live in\n"
-            "config/v2_attack_rules.json under \"multi_touch\".",
+            "Ring Sweep bình thường giữ từng cạnh base một, nên thẻ quân\n"
+            "dồn hết vào mấy cạnh đầu và nếu ít quân thì cạnh cuối không\n"
+            "còn con nào. Bật cái này thì cả bốn điểm được bấm cùng lúc,\n"
+            "quân chia đều cho các cạnh.\n\n"
+            "Nó ghi thẳng sự kiện chạm vào thiết bị cảm ứng, mà SELinux\n"
+            "chỉ cho phép khi có root — ADB thường không đặt được hai ngón\n"
+            "xuống cùng lúc. Không có root thì tự tắt, quay về kiểu giữ\n"
+            "lần lượt từng cạnh.\n\n"
+            "Thiết bị và chiều toạ độ nằm trong\n"
+            "config/v2_attack_rules.json, mục \"multi_touch\".",
         )
         self._chk_multi_touch.stateChanged.connect(self._on_value_changed)
         vis_lay.addWidget(self._chk_multi_touch)
 
         # Thresholds
         thr_row = QHBoxLayout()
-        thr_row.addWidget(QLabel("Troop conf:"))
+        thr_row.addWidget(QLabel("Độ khớp quân:"))
         self._spin_troop_thr = QDoubleSpinBox()
         self._spin_troop_thr.setRange(0.10, 0.95)
         self._spin_troop_thr.setSingleStep(0.05)
         self._spin_troop_thr.setDecimals(2)
-        self._spin_troop_thr.setToolTip("Troop/Spell matching confidence (lower = more lenient)")
+        self._spin_troop_thr.setToolTip("Độ khớp khi nhận thẻ quân/phép (thấp = dễ dãi hơn)")
         self._spin_troop_thr.valueChanged.connect(self._on_value_changed)
         thr_row.addWidget(self._spin_troop_thr)
 
-        thr_row.addWidget(QLabel("UI conf:"))
+        thr_row.addWidget(QLabel("Độ khớp nút:"))
         self._spin_ui_thr = QDoubleSpinBox()
         # Floor at 0.70. Lowering this does NOT make detection more willing —
         # it makes every template match everything. Measured over the seven
@@ -187,36 +186,37 @@ class SettingsTab(QWidget):
         self._spin_ui_thr.setSingleStep(0.05)
         self._spin_ui_thr.setDecimals(2)
         self._spin_ui_thr.setToolTip(
-            "UI button matching confidence.\n\n"
-            "A real button scores ~0.91-1.00; unrelated screens peak around\n"
-            "0.70. Lowering this past 0.70 makes templates match the wrong\n"
-            "screen — at 0.55 the home village reads as IN_BATTLE, at 0.40\n"
-            "everything reads as DISCONNECTED.\n\n"
-            "If a button is missed, re-capture it in the Asset Manager\n"
-            "instead of lowering this.",
+            "Độ khớp khi nhận nút trên giao diện game.\n\n"
+            "Nút thật đạt khoảng 0.91-1.00; màn hình không liên quan cao\n"
+            "nhất cũng chỉ tầm 0.70. Hạ xuống dưới 0.70 là ảnh mẫu khớp\n"
+            "nhầm màn hình — ở 0.55 màn làng chính bị đọc thành ĐANG ĐÁNH,\n"
+            "ở 0.40 mọi màn đều thành MẤT KẾT NỐI.\n\n"
+            "Nếu bot bỏ sót nút thì vào tab Ảnh mẫu chụp lại nút đó,\n"
+            "đừng hạ giá trị này.",
         )
         self._spin_ui_thr.valueChanged.connect(self._on_value_changed)
         thr_row.addWidget(self._spin_ui_thr)
 
-        thr_row.addWidget(QLabel("Building conf:"))
+        thr_row.addWidget(QLabel("Độ khớp công trình:"))
         self._spin_building_thr = QDoubleSpinBox()
         self._spin_building_thr.setRange(0.20, 0.95)
         self._spin_building_thr.setSingleStep(0.05)
         self._spin_building_thr.setDecimals(2)
-        self._spin_building_thr.setToolTip("Building / BB-card matching confidence")
+        self._spin_building_thr.setToolTip("Độ khớp khi nhận công trình / thẻ làng thợ")
         self._spin_building_thr.valueChanged.connect(self._on_value_changed)
         thr_row.addWidget(self._spin_building_thr)
         vis_lay.addLayout(thr_row)
 
         ocr_row = QHBoxLayout()
-        ocr_row.addWidget(QLabel("OCR min interval (s):"))
+        ocr_row.addWidget(QLabel("Giãn cách đọc chữ (giây):"))
         self._spin_ocr_interval = QDoubleSpinBox()
         self._spin_ocr_interval.setRange(0.5, 10.0)
         self._spin_ocr_interval.setSingleStep(0.5)
         self._spin_ocr_interval.setDecimals(1)
         self._spin_ocr_interval.setToolTip(
-            "Minimum seconds between EasyOCR calls during the bot loop.\n"
-            "Higher = lighter on CPU/GPU, but slightly stale loot/timer values.",
+            "Khoảng cách tối thiểu giữa hai lần chạy OCR.\n"
+            "Để cao thì nhẹ máy hơn, nhưng số tài nguyên và đồng hồ\n"
+            "sẽ cũ đi một chút.",
         )
         self._spin_ocr_interval.valueChanged.connect(self._on_value_changed)
         ocr_row.addWidget(self._spin_ocr_interval)
@@ -226,11 +226,11 @@ class SettingsTab(QWidget):
         root.addWidget(vis_grp)
 
         # ── Deployment Tuning ───────────────────────────────────────────
-        dep_grp = QGroupBox("Deployment Tuning")
+        dep_grp = QGroupBox("Tinh chỉnh thả quân")
         dep_lay = QVBoxLayout(dep_grp)
 
         r4 = QHBoxLayout()
-        r4.addWidget(QLabel("Hero ability delay (s):"))
+        r4.addWidget(QLabel("Chờ trước khi kích kỹ năng hero (giây):"))
         self._spin_hero_delay = QDoubleSpinBox()
         self._spin_hero_delay.setRange(1.0, 30.0)
         self._spin_hero_delay.setSingleStep(0.5)
@@ -238,7 +238,7 @@ class SettingsTab(QWidget):
         self._spin_hero_delay.valueChanged.connect(self._on_value_changed)
         r4.addWidget(self._spin_hero_delay)
 
-        r4.addWidget(QLabel("Deploy jitter (px):"))
+        r4.addWidget(QLabel("Lệch ngẫu nhiên khi thả (px):"))
         self._spin_jitter = QSpinBox()
         self._spin_jitter.setRange(0, 50)
         self._spin_jitter.setSingleStep(5)
@@ -249,40 +249,40 @@ class SettingsTab(QWidget):
         root.addWidget(dep_grp)
 
         # ── Game Presence ───────────────────────────────────────────────
-        game_grp = QGroupBox("Game Presence (ADB foreground monitoring)")
+        game_grp = QGroupBox("Theo dõi game (kiểm tra game có đang mở)")
         game_lay = QVBoxLayout(game_grp)
 
         gp_row = QHBoxLayout()
-        gp_row.addWidget(QLabel("Game package:"))
+        gp_row.addWidget(QLabel("Tên gói game:"))
         self._edit_game_pkg = QLineEdit()
         self._edit_game_pkg.setPlaceholderText("com.supercell.clashofclans")
         self._edit_game_pkg.setToolTip(
-            "Android package name of the game.\n"
-            "Detected via:  adb shell dumpsys window | findstr mCurrentFocus\n"
-            "Default: com.supercell.clashofclans",
+            "Tên gói Android của game.\n"
+            "Bot dò bằng:  adb shell dumpsys window | findstr mCurrentFocus\n"
+            "Mặc định: com.supercell.clashofclans",
         )
         self._edit_game_pkg.editingFinished.connect(self._on_value_changed)
         gp_row.addWidget(self._edit_game_pkg, 1)
         game_lay.addLayout(gp_row)
 
         gi_row = QHBoxLayout()
-        gi_row.addWidget(QLabel("Check interval (s):"))
+        gi_row.addWidget(QLabel("Kiểm tra mỗi (giây):"))
         self._spin_game_interval = QSpinBox()
         self._spin_game_interval.setRange(0, 600)
         self._spin_game_interval.setSingleStep(5)
         self._spin_game_interval.setToolTip(
-            "How often (in seconds) the bot verifies that the game is the\n"
-            "foreground app. Set to 0 to disable periodic checks.\n"
-            "Recommended: 30–60 seconds.",
+            "Bao lâu bot kiểm tra một lần xem game có đang ở trên cùng\n"
+            "không. Để 0 là tắt kiểm tra định kỳ.\n"
+            "Nên để 30–60 giây.",
         )
         self._spin_game_interval.valueChanged.connect(self._on_value_changed)
         gi_row.addWidget(self._spin_game_interval)
 
-        self._chk_auto_launch = QCheckBox("Auto-launch game when not focused")
+        self._chk_auto_launch = QCheckBox("Tự mở lại game khi game bị đẩy xuống dưới")
         self._chk_auto_launch.setToolTip(
-            "If the game isn't in the foreground, the bot will issue:\n"
-            "  adb shell monkey -p <package> -c LAUNCHER 1\n"
-            "to bring it back automatically.",
+            "Nếu game không ở trên cùng, bot sẽ chạy:\n"
+            "  adb shell monkey -p <tên gói> -c LAUNCHER 1\n"
+            "để mở lại game.",
         )
         self._chk_auto_launch.stateChanged.connect(self._on_value_changed)
         gi_row.addWidget(self._chk_auto_launch)
@@ -292,18 +292,18 @@ class SettingsTab(QWidget):
         root.addWidget(game_grp)
 
         # ── Console Settings ────────────────────────────────────────────
-        con_grp = QGroupBox("Console")
+        con_grp = QGroupBox("Bảng log")
         con_lay = QVBoxLayout(con_grp)
 
         r5 = QHBoxLayout()
-        r5.addWidget(QLabel("Max lines:"))
+        r5.addWidget(QLabel("Số dòng tối đa:"))
         self._spin_max_lines = QSpinBox()
         self._spin_max_lines.setRange(500, 50000)
         self._spin_max_lines.setSingleStep(500)
         self._spin_max_lines.valueChanged.connect(self._on_value_changed)
         r5.addWidget(self._spin_max_lines)
 
-        r5.addWidget(QLabel("Font size:"))
+        r5.addWidget(QLabel("Cỡ chữ:"))
         self._spin_font = QSpinBox()
         self._spin_font.setRange(8, 24)
         self._spin_font.setSingleStep(1)
@@ -311,7 +311,7 @@ class SettingsTab(QWidget):
         r5.addWidget(self._spin_font)
         con_lay.addLayout(r5)
 
-        self._chk_debug = QCheckBox("Show DEBUG messages")
+        self._chk_debug = QCheckBox("Hiện log chi tiết (DEBUG)")
         self._chk_debug.stateChanged.connect(self._on_value_changed)
         con_lay.addWidget(self._chk_debug)
 
@@ -319,7 +319,7 @@ class SettingsTab(QWidget):
 
         # ── Actions ─────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        self._btn_reset = QPushButton("🔄  Reset to Defaults")
+        self._btn_reset = QPushButton("🔄  Khôi phục mặc định")
         self._btn_reset.clicked.connect(self._on_reset)
         btn_row.addWidget(self._btn_reset)
         btn_row.addStretch()
@@ -409,7 +409,7 @@ class SettingsTab(QWidget):
         s.set("console_show_debug", self._chk_debug.isChecked())
         s.save()
         self.settings_changed.emit()
-        self._status_lbl.setText("✓ Saved")
+        self._status_lbl.setText("✓ Đã lưu")
 
     # ═══════════════════════════════════════════════════════════════════
     #  SLOTS
@@ -431,7 +431,7 @@ class SettingsTab(QWidget):
         self._settings.reset()
         self._load_values()
         self.settings_changed.emit()
-        self._status_lbl.setText("✓ Reset to defaults")
+        self._status_lbl.setText("✓ Đã khôi phục mặc định")
 
     def _update_preset_desc(self, key: str) -> None:
         p = PRESETS.get(key, {})

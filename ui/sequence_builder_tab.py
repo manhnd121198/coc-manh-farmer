@@ -54,11 +54,11 @@ class _SequenceEditor(QGroupBox):
 
         refresh_btn = QPushButton("🔄")
         refresh_btn.setFixedWidth(32)
-        refresh_btn.setToolTip("Refresh list (picks up newly added assets)")
+        refresh_btn.setToolTip("Nạp lại danh sách (lấy cả ảnh mẫu vừa thêm)")
         refresh_btn.clicked.connect(self._populate_combo)
         add_row.addWidget(refresh_btn)
 
-        add_btn = QPushButton("➕ Add Step")
+        add_btn = QPushButton("➕ Thêm bước")
         add_btn.clicked.connect(self._add_step)
         add_row.addWidget(add_btn)
         layout.addLayout(add_row)
@@ -154,24 +154,24 @@ class SequenceBuilderTab(QWidget):
         layout = QVBoxLayout(container)
         layout.setSpacing(12)
 
-        hdr = QLabel("Attack Sequence Builder")
+        hdr = QLabel("Chuỗi thao tác vào trận")
         hdr.setFont(QFont("Segoe UI", 14, QFont.Bold))
         layout.addWidget(hdr)
 
         info = QLabel(
-            "Define the exact button-press sequence the bot uses to ENTER an attack.\n"
-            "For each step, it scans → taps → waits → next step.\n"
-            "Drag items to reorder. ❌ = unmapped asset (map it in Asset Manager)."
+            "Khai báo đúng thứ tự các nút bot phải bấm để VÀO một trận đánh.\n"
+            "Mỗi bước: dò → bấm → chờ → sang bước sau.\n"
+            "Kéo để đổi thứ tự. ❌ = chưa có ảnh mẫu (vào tab Ảnh mẫu để chụp)."
         )
         info.setWordWrap(True)
         info.setStyleSheet("color: #9e9e9e; padding: 8px;")
         layout.addWidget(info)
 
-        self._hv = _SequenceEditor("🏠  Home Village — Attack Entry Sequence")
+        self._hv = _SequenceEditor("🏠  Làng chính — Chuỗi vào trận")
         self._hv.sequence_changed.connect(self._changed)
         layout.addWidget(self._hv)
 
-        self._bb = _SequenceEditor("🔨  Builder Base — Attack Entry Sequence")
+        self._bb = _SequenceEditor("🔨  Làng thợ — Chuỗi vào trận")
         self._bb.sequence_changed.connect(self._changed)
         layout.addWidget(self._bb)
 

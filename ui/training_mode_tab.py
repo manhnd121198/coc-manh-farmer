@@ -198,7 +198,7 @@ class TrainingModeTab(QWidget):
 
         # Toolbar
         toolbar = QHBoxLayout()
-        self._screenshot_btn = QPushButton("📷  Take Screenshot")
+        self._screenshot_btn = QPushButton("📷  Chụp màn hình")
         self._screenshot_btn.setMinimumHeight(36)
         self._screenshot_btn.clicked.connect(self._take_screenshot)
         toolbar.addWidget(self._screenshot_btn)
@@ -211,7 +211,7 @@ class TrainingModeTab(QWidget):
         left_layout.addWidget(self._canvas)
 
         # Selection info
-        self._selection_label = QLabel("Draw a bounding box on the screenshot above.")
+        self._selection_label = QLabel("Khoanh một khung trên ảnh phía trên.")
         self._selection_label.setObjectName("status_label")
         left_layout.addWidget(self._selection_label)
 
@@ -223,20 +223,20 @@ class TrainingModeTab(QWidget):
         right_layout = QVBoxLayout(right)
 
         # Save controls
-        save_group = QGroupBox("Save Template")
+        save_group = QGroupBox("Lưu ảnh mẫu")
         save_grid = QGridLayout()
 
-        save_grid.addWidget(QLabel("Name:"), 0, 0)
+        save_grid.addWidget(QLabel("Tên:"), 0, 0)
         self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("e.g. next_button")
+        self._name_edit.setPlaceholderText("ví dụ: next_button")
         save_grid.addWidget(self._name_edit, 0, 1)
 
-        save_grid.addWidget(QLabel("Category:"), 1, 0)
+        save_grid.addWidget(QLabel("Nhóm:"), 1, 0)
         self._category_combo = QComboBox()
         self._category_combo.addItems([c.replace('_', ' ').title() for c in get_all_categories()])
         save_grid.addWidget(self._category_combo, 1, 1)
 
-        self._save_btn = QPushButton("💾  Save Template")
+        self._save_btn = QPushButton("💾  Lưu ảnh mẫu")
         self._save_btn.setEnabled(False)
         self._save_btn.clicked.connect(self._save_template)
         save_grid.addWidget(self._save_btn, 2, 0, 1, 2)
@@ -252,13 +252,13 @@ class TrainingModeTab(QWidget):
         right_layout.addWidget(self._preview_label)
 
         # Template list
-        list_group = QGroupBox("Saved Templates")
+        list_group = QGroupBox("Ảnh mẫu đã lưu")
         list_layout = QVBoxLayout()
 
         filter_layout = QHBoxLayout()
-        filter_layout.addWidget(QLabel("Filter:"))
+        filter_layout.addWidget(QLabel("Lọc:"))
         self._filter_combo = QComboBox()
-        self._filter_combo.addItems(["All"] + [c.replace('_', ' ').title() for c in get_all_categories()])
+        self._filter_combo.addItems(["Tất cả"] + [c.replace('_', ' ').title() for c in get_all_categories()])
         self._filter_combo.currentTextChanged.connect(self._refresh_list)
         filter_layout.addWidget(self._filter_combo)
         list_layout.addLayout(filter_layout)
@@ -267,7 +267,7 @@ class TrainingModeTab(QWidget):
         self._template_list.currentItemChanged.connect(self._on_template_selected)
         list_layout.addWidget(self._template_list)
 
-        self._delete_btn = QPushButton("🗑  Delete Selected")
+        self._delete_btn = QPushButton("🗑  Xoá mục đã chọn")
         self._delete_btn.setEnabled(False)
         self._delete_btn.clicked.connect(self._delete_template)
         list_layout.addWidget(self._delete_btn)
@@ -289,12 +289,12 @@ class TrainingModeTab(QWidget):
         img = screencap()
         if img is None:
             QMessageBox.warning(
-                self, "Screenshot Failed",
-                "Could not capture screen. Make sure a device is connected via 2adb.exe.",
+                self, "Chụp thất bại",
+                "Không chụp được màn hình. Kiểm tra thiết bị đã kết nối chưa.",
             )
             return
         self._canvas.set_image(img)
-        self._selection_label.setText("Screenshot captured. Draw a bounding box to select a region.")
+        self._selection_label.setText("Đã chụp. Khoanh một khung để chọn vùng.")
         log.info("Screenshot displayed on canvas.")
 
     # ── Region Selection ────────────────────────────────────────────────
@@ -316,17 +316,17 @@ class TrainingModeTab(QWidget):
     def _save_template(self) -> None:
         name = self._name_edit.text().strip()
         if not name:
-            QMessageBox.warning(self, "No Name", "Please enter a template name.")
+            QMessageBox.warning(self, "Thiếu tên", "Nhập tên cho ảnh mẫu.")
             return
 
         if self._selected_region is None:
-            QMessageBox.warning(self, "No Region", "Please draw a bounding box first.")
+            QMessageBox.warning(self, "Chưa khoanh vùng", "Khoanh một khung trước đã.")
             return
 
         x, y, w, h = self._selected_region
         crop = self._canvas.get_crop(x, y, w, h)
         if crop is None:
-            QMessageBox.warning(self, "Crop Failed", "Could not extract the selected region.")
+            QMessageBox.warning(self, "Cắt thất bại", "Không lấy được vùng đã chọn.")
             return
 
         category = self._category_combo.currentText().lower()
@@ -334,8 +334,8 @@ class TrainingModeTab(QWidget):
         log.info("Template '%s' saved to %s", name, path)
 
         QMessageBox.information(
-            self, "Template Saved",
-            f"Template '{name}' saved successfully!\n{path}",
+            self, "Đã lưu",
+            f"Đã lưu ảnh mẫu '{name}'.\n{path}",
         )
 
         self._name_edit.clear()
@@ -387,8 +387,8 @@ class TrainingModeTab(QWidget):
             return
         name = item.data(Qt.UserRole)
         reply = QMessageBox.question(
-            self, "Delete Template",
-            f"Delete template '{name}'? This cannot be undone.",
+            self, "Xoá ảnh mẫu",
+            f"Xoá ảnh mẫu '{name}'? Không khôi phục lại được.",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:

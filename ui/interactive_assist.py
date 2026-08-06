@@ -175,7 +175,7 @@ class InteractiveAssistDialog(QDialog):
 
     def __init__(self, screenshot: np.ndarray, parent=None, reason: str = ""):
         super().__init__(parent)
-        self.setWindowTitle("⚠ Bot Needs Help — Interactive Assist")
+        self.setWindowTitle("⚠ Bot cần trợ giúp")
         self.setMinimumSize(900, 600)
         self.setModal(True)
         self._screenshot = screenshot
@@ -193,16 +193,16 @@ class InteractiveAssistDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Warning header
-        hdr_text = "⚠  The bot is stuck or on an unknown screen."
+        hdr_text = "⚠  Bot đang kẹt hoặc gặp màn hình lạ."
         if self._reason:
-            hdr_text += f"\n🔍 Looking for: {self._reason}"
+            hdr_text += f"\n🔍 Đang tìm: {self._reason}"
         hdr = QLabel(hdr_text)
         hdr.setFont(QFont("Segoe UI", 13, QFont.Bold))
         hdr.setStyleSheet("color: #e94560; padding: 8px;")
         hdr.setAlignment(Qt.AlignCenter)
         layout.addWidget(hdr)
 
-        info = QLabel("Choose an action below. The bot is PAUSED until you respond.")
+        info = QLabel("Chọn một cách xử lý bên dưới. Bot đang TẠM DỪNG cho tới khi bạn chọn.")
         info.setAlignment(Qt.AlignCenter)
         info.setStyleSheet("color: #9e9e9e;")
         layout.addWidget(info)
@@ -213,31 +213,31 @@ class InteractiveAssistDialog(QDialog):
         self._canvas.region_selected.connect(self._on_region)
         layout.addWidget(self._canvas)
 
-        self._status = QLabel("Select an option below.")
+        self._status = QLabel("Chọn một mục bên dưới.")
         self._status.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._status)
 
         # ── Option 1: Save as New Asset ──────────────────────────────────
-        asset_group = QGroupBox("Option 1: This is a New Asset (Draw Box + Save)")
+        asset_group = QGroupBox("Cách 1: Đây là ảnh mẫu mới (khoanh vùng rồi lưu)")
         asset_layout = QHBoxLayout()
 
-        self._draw_btn = QPushButton("✏  Enable Drawing Mode")
+        self._draw_btn = QPushButton("✏  Bật chế độ khoanh vùng")
         self._draw_btn.setMinimumHeight(34)
         self._draw_btn.clicked.connect(self._enable_draw)
         asset_layout.addWidget(self._draw_btn)
 
-        asset_layout.addWidget(QLabel("Name:"))
+        asset_layout.addWidget(QLabel("Tên:"))
         self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("e.g. new_confirm_btn")
+        self._name_edit.setPlaceholderText("ví dụ: new_confirm_btn")
         self._name_edit.setMinimumWidth(150)
         asset_layout.addWidget(self._name_edit)
 
-        asset_layout.addWidget(QLabel("Category:"))
+        asset_layout.addWidget(QLabel("Nhóm:"))
         self._cat_combo = QComboBox()
         self._cat_combo.addItems([c.replace("_", " ").title() for c in VALID_CATEGORIES])
         asset_layout.addWidget(self._cat_combo)
 
-        self._save_asset_btn = QPushButton("💾  Save Asset")
+        self._save_asset_btn = QPushButton("💾  Lưu ảnh mẫu")
         self._save_asset_btn.setMinimumHeight(34)
         self._save_asset_btn.setEnabled(False)
         self._save_asset_btn.clicked.connect(self._save_asset)
@@ -249,12 +249,12 @@ class InteractiveAssistDialog(QDialog):
         # ── Option 2 & 3 ───────────────────────────────────────────────
         btn_row = QHBoxLayout()
 
-        self._tap_btn = QPushButton("👆  Option 2: Manual Tap (click on screenshot)")
+        self._tap_btn = QPushButton("👆  Cách 2: Tự bấm tay (click lên ảnh)")
         self._tap_btn.setMinimumHeight(36)
         self._tap_btn.clicked.connect(self._enable_tap)
         btn_row.addWidget(self._tap_btn)
 
-        self._abort_btn = QPushButton("🏠  Option 3: Abort to Home")
+        self._abort_btn = QPushButton("🏠  Cách 3: Thoát về màn chính")
         self._abort_btn.setMinimumHeight(36)
         self._abort_btn.clicked.connect(self._abort_home)
         btn_row.addWidget(self._abort_btn)
@@ -262,17 +262,17 @@ class InteractiveAssistDialog(QDialog):
         layout.addLayout(btn_row)
 
         # Cancel
-        cancel_btn = QPushButton("Cancel (keep bot paused)")
+        cancel_btn = QPushButton("Huỷ (giữ bot tạm dừng)")
         cancel_btn.clicked.connect(self.reject)
         layout.addWidget(cancel_btn)
 
     def _enable_draw(self):
         self._canvas.set_mode("draw")
-        self._status.setText("Draw a bounding box around the element, then fill in Name + Category and Save.")
+        self._status.setText("Khoanh một khung quanh phần tử, rồi điền Tên + Nhóm và bấm Lưu.")
 
     def _enable_tap(self):
         self._canvas.set_mode("tap")
-        self._status.setText("Click on the screenshot where you want the bot to tap.")
+        self._status.setText("Click lên ảnh ở chỗ bạn muốn bot bấm.")
 
     def _on_tap(self, x: int, y: int):
         self._tap_coords = (x, y)
@@ -292,10 +292,10 @@ class InteractiveAssistDialog(QDialog):
     def _save_asset(self):
         name = self._name_edit.text().strip().lower().replace(" ", "_")
         if not name:
-            QMessageBox.warning(self, "No Name", "Enter an asset name.")
+            QMessageBox.warning(self, "Thiếu tên", "Nhập tên cho ảnh mẫu.")
             return
         if self._crop is None:
-            QMessageBox.warning(self, "No Region", "Draw a box first.")
+            QMessageBox.warning(self, "Chưa khoanh vùng", "Khoanh một khung trước đã.")
             return
         cat_index = self._cat_combo.currentIndex()
         category = VALID_CATEGORIES[cat_index] if cat_index < len(VALID_CATEGORIES) else "custom"
@@ -303,7 +303,7 @@ class InteractiveAssistDialog(QDialog):
         log.info("Interactive Assist: saved asset '%s' -> %s", name, path)
         self._result_action = AssistAction.SAVED_ASSET
         self._result_data = name
-        QMessageBox.information(self, "Saved", f"Asset '{name}' saved!")
+        QMessageBox.information(self, "Đã lưu", f"Đã lưu ảnh mẫu '{name}'.")
         self.accept()
 
     def _abort_home(self):

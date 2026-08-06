@@ -87,45 +87,45 @@ class BuilderBaseTab(QWidget):
         layout = QVBoxLayout(container)
         layout.setSpacing(10)
 
-        hdr = QLabel("Builder Base — Advanced Attack Configuration")
+        hdr = QLabel("Làng thợ — Cấu hình tấn công")
         hdr.setFont(QFont("Segoe UI", 14, QFont.Bold))
         layout.addWidget(hdr)
 
         # ── Match Mode ──────────────────────────────────────────────────
-        match_group = QGroupBox("Match Settings")
+        match_group = QGroupBox("Loại trận")
         match_layout = QHBoxLayout()
-        match_layout.addWidget(QLabel("Mode:"))
+        match_layout.addWidget(QLabel("Chế độ:"))
         self._match_mode = QComboBox()
-        self._match_mode.addItems(["Ranked", "Practice"])
+        self._match_mode.addItems(["Xếp hạng", "Tập luyện"])
         match_layout.addWidget(self._match_mode)
         match_layout.addStretch()
         match_group.setLayout(match_layout)
         layout.addWidget(match_group)
 
         # ── Abilities Configuration ─────────────────────────────────
-        abilities_group = QGroupBox("Abilities & Automation")
+        abilities_group = QGroupBox("Kỹ năng và tự động")
         ab_layout = QGridLayout()
 
-        self._troop_abilities = QCheckBox("Auto-Trigger Troop Abilities (e.g., Bomber)")
+        self._troop_abilities = QCheckBox("Tự kích kỹ năng quân (ví dụ Bomber)")
         self._troop_abilities.setChecked(True)
         ab_layout.addWidget(self._troop_abilities, 0, 0, 1, 2)
 
-        ab_layout.addWidget(QLabel("Trigger Hero Ability Every (Seconds):"), 1, 0)
+        ab_layout.addWidget(QLabel("Kích kỹ năng hero mỗi (giây):"), 1, 0)
         self._hero_timer = QSpinBox()
         self._hero_timer.setRange(5, 60)
         self._hero_timer.setValue(15)
         ab_layout.addWidget(self._hero_timer, 1, 1)
 
         # ── NEW: Post-Deployment Timer (silent end-of-stage countdown) ──
-        self._deploy_timer_enabled = QCheckBox("End BB battle after troops/heroes are deployed")
+        self._deploy_timer_enabled = QCheckBox("Tự kết thúc trận làng thợ sau khi thả hết quân")
         self._deploy_timer_enabled.setToolTip(
-            "Once the bot finishes the deployment for the current BB stage,\n"
-            "it counts the seconds silently. When the countdown ends the bot\n"
-            "stops nudging abilities and lets the natural BB flow finish.",
+            "Thả xong quân cho lượt hiện tại thì bot đếm ngược ngầm.\n"
+            "Hết giờ thì thôi không kích kỹ năng nữa, để trận tự chạy\n"
+            "đến khi kết thúc.",
         )
         ab_layout.addWidget(self._deploy_timer_enabled, 2, 0, 1, 2)
 
-        ab_layout.addWidget(QLabel("End after deployment (s):"), 3, 0)
+        ab_layout.addWidget(QLabel("Đếm ngược sau khi thả (giây):"), 3, 0)
         self._deploy_timer_seconds = QSpinBox()
         self._deploy_timer_seconds.setRange(5, 300)
         self._deploy_timer_seconds.setSingleStep(5)
@@ -136,30 +136,30 @@ class BuilderBaseTab(QWidget):
         layout.addWidget(abilities_group)
 
         # ── Hybrid Attack Mode ──────────────────────────────────────────
-        mode_group = QGroupBox("Execution Strategy")
+        mode_group = QGroupBox("Cách thực hiện")
         mode_layout = QHBoxLayout()
 
-        mode_layout.addWidget(QLabel("Strategy:"))
+        mode_layout.addWidget(QLabel("Cách đánh:"))
         self._attack_mode = QComboBox()
-        self._attack_mode.addItems(["Smart Vision AI", "Playback Recorded Macro"])
+        self._attack_mode.addItems(["Smart Vision AI", "Phát lại thao tác đã ghi"])
         self._attack_mode.currentIndexChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self._attack_mode)
 
-        self._macro_label = QLabel("Macro:")
+        self._macro_label = QLabel("Thao tác:")
         self._macro_label.hide()
         mode_layout.addWidget(self._macro_label)
 
-        self._macro_path_label = QLabel("(none)")
+        self._macro_path_label = QLabel("(chưa chọn)")
         self._macro_path_label.setStyleSheet("color: #9e9e9e;")
         self._macro_path_label.hide()
         mode_layout.addWidget(self._macro_path_label)
 
-        self._macro_pick_btn = QPushButton("📂 Browse…")
+        self._macro_pick_btn = QPushButton("📂 Chọn tệp…")
         self._macro_pick_btn.hide()
         self._macro_pick_btn.clicked.connect(self._pick_macro)
         mode_layout.addWidget(self._macro_pick_btn)
 
-        self._record_btn = QPushButton("🔴 Record Macro")
+        self._record_btn = QPushButton("🔴 Ghi thao tác")
         self._record_btn.setMinimumHeight(32)
         self._record_btn.clicked.connect(self._toggle_recording)
         mode_layout.addWidget(self._record_btn)
@@ -172,9 +172,9 @@ class BuilderBaseTab(QWidget):
         # ── Lists (Drag & Drop) ───────────────────────────────────────
         lists_layout = QHBoxLayout()
 
-        troop_box = QGroupBox("BB Troops (Drag to Reorder)")
+        troop_box = QGroupBox("Quân làng thợ (kéo để đổi thứ tự)")
         tv = QVBoxLayout()
-        troop_refresh = QPushButton("🔄 Refresh BB Assets")
+        troop_refresh = QPushButton("🔄 Nạp lại ảnh mẫu làng thợ")
         troop_refresh.clicked.connect(lambda: self._rebuild_lists())
         tv.addWidget(troop_refresh)
         self._troop_list = _OrderableList()
@@ -182,7 +182,7 @@ class BuilderBaseTab(QWidget):
         troop_box.setLayout(tv)
         lists_layout.addWidget(troop_box)
 
-        hero_box = QGroupBox("BB Heroes (Drag to Reorder)")
+        hero_box = QGroupBox("Hero làng thợ (kéo để đổi thứ tự)")
         hv = QVBoxLayout()
         self._hero_list = _OrderableList()
         hv.addWidget(self._hero_list)
@@ -198,13 +198,13 @@ class BuilderBaseTab(QWidget):
 
         # ── Action Buttons ──────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        self._start_btn = QPushButton("▶  Start Builder Base")
+        self._start_btn = QPushButton("▶  Bắt đầu làng thợ")
         self._start_btn.setObjectName("start_button")
         self._start_btn.setMinimumHeight(40)
         self._start_btn.clicked.connect(self.start_requested.emit)
         btn_row.addWidget(self._start_btn)
 
-        self._stop_btn = QPushButton("■  Stop")
+        self._stop_btn = QPushButton("■  Dừng")
         self._stop_btn.setObjectName("stop_button")
         self._stop_btn.setMinimumHeight(40)
         self._stop_btn.setEnabled(False)
@@ -264,13 +264,13 @@ class BuilderBaseTab(QWidget):
     def _toggle_recording(self) -> None:
         if not self._recording:
             self._recording = True
-            self._record_btn.setText("⏹ Stop Recording")
+            self._record_btn.setText("⏹ Dừng ghi")
             self._record_btn.setObjectName("stop_button")
             self._record_btn.setStyle(self._record_btn.style())
             start_recording()
         else:
             self._recording = False
-            self._record_btn.setText("🔴 Record Macro")
+            self._record_btn.setText("🔴 Ghi thao tác")
             self._record_btn.setObjectName("")
             self._record_btn.setStyle(self._record_btn.style())
             events = stop_recording()

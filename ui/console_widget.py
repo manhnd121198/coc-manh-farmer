@@ -65,7 +65,7 @@ class ConsoleWidget(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(6)
 
-        title = QLabel("📋  Console Output")
+        title = QLabel("📋  Bảng log")
         title.setObjectName("header_label")
         title.setStyleSheet("font-size: 13px; padding: 2px;")
         toolbar.addWidget(title)
@@ -74,7 +74,7 @@ class ConsoleWidget(QWidget):
 
         # Search
         self._search = QLineEdit()
-        self._search.setPlaceholderText("🔎 Search…")
+        self._search.setPlaceholderText("🔎 Tìm…")
         self._search.setFixedWidth(180)
         self._search.setStyleSheet(
             "background: #0d0d1a; border: 1px solid #0f3460; "
@@ -84,19 +84,19 @@ class ConsoleWidget(QWidget):
         toolbar.addWidget(self._search)
 
         # Auto-scroll toggle
-        self._chk_scroll = QCheckBox("Auto-scroll")
+        self._chk_scroll = QCheckBox("Tự cuộn xuống")
         self._chk_scroll.setChecked(True)
         self._chk_scroll.toggled.connect(self._on_scroll_toggled)
         toolbar.addWidget(self._chk_scroll)
 
         # Buttons
-        self._btn_copy = QPushButton("📋 Copy")
+        self._btn_copy = QPushButton("📋 Chép")
         self._btn_copy.setFixedWidth(75)
         self._btn_copy.clicked.connect(self._copy_all)
-        self._btn_copy.setToolTip("Copy all console text to clipboard")
+        self._btn_copy.setToolTip("Chép toàn bộ log vào clipboard")
         toolbar.addWidget(self._btn_copy)
 
-        self._btn_clear = QPushButton("🗑 Clear")
+        self._btn_clear = QPushButton("🗑 Xoá")
         self._btn_clear.setFixedWidth(75)
         self._btn_clear.clicked.connect(self._clear)
         toolbar.addWidget(self._btn_clear)
@@ -117,7 +117,7 @@ class ConsoleWidget(QWidget):
         layout.addWidget(self._text_edit)
 
         # ── Status bar ──────────────────────────────────────────────────
-        self._line_count = QLabel("Lines: 0")
+        self._line_count = QLabel("Số dòng: 0")
         self._line_count.setObjectName("status_label")
         self._line_count.setStyleSheet("font-size: 11px; color: #6a7080; padding: 2px 4px;")
         layout.addWidget(self._line_count)
@@ -181,7 +181,7 @@ class ConsoleWidget(QWidget):
 
     def _clear(self) -> None:
         self._text_edit.clear()
-        self._line_count.setText("Lines: 0")
+        self._line_count.setText("Số dòng: 0")
 
     def _copy_all(self) -> None:
         from PyQt5.QtWidgets import QApplication

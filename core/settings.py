@@ -11,7 +11,7 @@ _SETTINGS_FILE = os.path.join(
 # ── Performance Presets (5 Profiles) ───────────────────────────────────
 PRESETS: dict[str, dict] = {
     "ultra": {
-        "label": "⚡ Ultra (Dedicated GPU - 4K/2K)",
+        "label": "⚡ Tối đa (card rời, màn 4K/2K)",
         "tick_interval": 0.5,
         "tap_delay_min": 0.01,
         "tap_delay_max": 0.03,
@@ -23,10 +23,10 @@ PRESETS: dict[str, dict] = {
         "vision_ui_threshold": 0.80,
         "vision_building_threshold": 0.42,
         "vision_bb_card_threshold": 0.42,
-        "description": "أعلى سرعة ودقة فائقة. للأجهزة القوية وشاشات 2K/4K وكرت شاشة خارجي.",
+        "description": "Nhanh và chính xác nhất. Cho máy mạnh, màn 2K/4K, có card rời.",
     },
     "high": {
-        "label": "🔥 High (Good GPU / High Spec)",
+        "label": "🔥 Cao (card tốt, máy mạnh)",
         "tick_interval": 0.8,
         "tap_delay_min": 0.02,
         "tap_delay_max": 0.05,
@@ -38,10 +38,10 @@ PRESETS: dict[str, dict] = {
         "vision_ui_threshold": 0.80,
         "vision_building_threshold": 0.38,
         "vision_bb_card_threshold": 0.38,
-        "description": "أداء سريع وموثوق للأجهزة القوية والمتوسطة المتقدمة.",
+        "description": "Nhanh và ổn định. Cho máy mạnh hoặc tầm trung khá.",
     },
     "medium": {
-        "label": "💻 Medium (Balanced CPU)",
+        "label": "💻 Trung bình (CPU, cân bằng)",
         "tick_interval": 1.0,
         "tap_delay_min": 0.03,
         "tap_delay_max": 0.08,
@@ -53,10 +53,10 @@ PRESETS: dict[str, dict] = {
         "vision_ui_threshold": 0.80,
         "vision_building_threshold": 0.35,
         "vision_bb_card_threshold": 0.35,
-        "description": "أداء متوازن ومناسب لمعظم أجهزة المعالج بدون كرت شاشة منفصل.",
+        "description": "Cân bằng. Hợp với đa số máy chạy CPU, không card rời.",
     },
     "low": {
-        "label": "🐢 Low (Weak CPU / Low-End Hardware)",
+        "label": "🐢 Thấp (CPU yếu, máy cấu hình thấp)",
         "tick_interval": 1.5,
         "tap_delay_min": 0.05,
         "tap_delay_max": 0.12,
@@ -68,10 +68,10 @@ PRESETS: dict[str, dict] = {
         "vision_ui_threshold": 0.80,
         "vision_building_threshold": 0.30,
         "vision_bb_card_threshold": 0.30,
-        "description": "خفيف وآمن جداً. للابتوبات والأجهزة الضعيفة والمحاكيات الخفيفة.",
+        "description": "Nhẹ và an toàn. Cho laptop, máy yếu, giả lập cấu hình thấp.",
     },
     "smart_default": {
-        "label": "🤖 Smart Adaptive Profile (البروفايل الذكي التلقائي)",
+        "label": "🤖 Tự thích ứng theo máy",
         "tick_interval": 0.9,
         "tap_delay_min": 0.025,
         "tap_delay_max": 0.065,
@@ -83,7 +83,7 @@ PRESETS: dict[str, dict] = {
         "vision_ui_threshold": 0.80,
         "vision_building_threshold": 0.34,
         "vision_bb_card_threshold": 0.34,
-        "description": "بروفايل ذكي يتكيف تلقائياً مع أبعاد الشاشات والتابلت ومواصفات الجهاز (مربوط مع Reset to Default).",
+        "description": "Tự thích ứng theo kích thước màn hình và cấu hình máy (dùng chung với nút Khôi phục mặc định).",
     },
 }
 
