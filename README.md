@@ -18,8 +18,10 @@ Bot tự động farm **Clash of Clans** chạy trên máy tính Windows. Bot ch
 - Tự nhận độ phân giải (`wm size`) và mật độ màn hình (`wm density`).
 - Hỗ trợ điện thoại, máy tính bảng và các emulator như LDPlayer hoặc BlueStacks.
 - Dùng OCR để đọc Gold, Elixir và Dark Elixir; tự bỏ qua làng không đạt ngưỡng tài nguyên.
+- Tùy chọn thỉnh thoảng bỏ qua 1–2 làng dù đủ tài nguyên, cho nhịp tìm trận đỡ đều đặn.
 - Nhận diện nút, quân, hero, spell và công trình bằng template matching.
 - Tự tìm trận, triển khai quân, kích hoạt kỹ năng hero và thả spell.
+- Tùy chọn đọc lại thanh quân sau khi đánh xong và thả nốt thẻ nào còn quân.
 - Hỗ trợ Home Village và Builder Base nhiều giai đoạn.
 - Tự phát hiện mất kết nối, popup bất thường và trạng thái bị kẹt.
 - Có các profile hiệu năng `Ultra`, `High`, `Medium`, `Low` và `Smart Default`.
@@ -70,6 +72,9 @@ flowchart TD
     Logic --> CSR["V2 Orchestrator + Rules"]
     CSR -->|Chạm và vuốt| ADB
 ```
+
+Chi tiết cách bot chạy bên trong — vòng tick, state machine, hệ tấn công V2,
+đường dự phòng — xem [docs/architecture.md](docs/architecture.md).
 
 ## Yêu cầu
 
