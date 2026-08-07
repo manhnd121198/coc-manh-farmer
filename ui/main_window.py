@@ -403,6 +403,9 @@ class MainWindow(QMainWindow):
         return {
             # HV thresholds
             "min_gold": 200000, "min_elixir": 200000, "min_dark_elixir": 1000,
+            # HV random skip (Normal matchmaking only)
+            "hv_random_skip_enabled": False, "hv_random_skip_chance": 20,
+            "hv_random_skip_min": 1, "hv_random_skip_max": 2,
             # HV retreat
             "auto_retreat_enabled": False, "retreat_heroes_dead": False,
             "retreat_gold": 50000, "retreat_elixir": 50000,

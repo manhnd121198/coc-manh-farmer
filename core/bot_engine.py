@@ -102,6 +102,21 @@ class BotEngine(QThread):
         self._skip_count += 1
         self.stats_changed.emit(self._attack_count, self._skip_count)
 
+    def record_attack_cancelled(self) -> None:
+        """A battle already counted, then walked away from without deploying.
+
+        Moves it from the attack column to the skip column so the tally
+        keeps meaning "battles actually fought" — the count is armed the
+        moment the bot commits to a base, which is before the planner gets
+        its say.
+        """
+        if self._attack_count > 0:
+            self._attack_count -= 1
+        self._skip_count += 1
+        log.info("SESSION: attack cancelled → %d attack(s), %d skip(s).",
+                 self._attack_count, self._skip_count)
+        self.stats_changed.emit(self._attack_count, self._skip_count)
+
     def reset_stats(self) -> None:
         self._attack_count = 0
         self._skip_count = 0

@@ -47,6 +47,10 @@ class SmartV2Logic:
         self._mode_key = mode_key  # "hv" or "bb"
         self._engine = None
 
+        # Bases walked away from without deploying, since the last one that
+        # actually got attacked. Caps the skip-instead-of-fallback option.
+        self._skipped_in_a_row = 0
+
     def set_engine(self, engine) -> None:
         self._engine = engine
 
@@ -64,7 +68,10 @@ class SmartV2Logic:
     def available_rules(self) -> list[str]:
         return self._orchestrator.available_rules()
 
-    def execute(self, screenshot: np.ndarray) -> None:
+    def execute(self, screenshot: np.ndarray) -> bool:
+        """Run the attack. False means NOTHING was deployed and the caller
+        should walk away from this base — the only way that happens is the
+        "skip instead of falling back" option below."""
         s = Settings()
         mode: Mode = str(s.get(f"v2_mode_{self._mode_key}", "smart"))  # type: ignore[assignment]
         target = str(s.get(f"v2_target_{self._mode_key}", ""))
@@ -77,14 +84,51 @@ class SmartV2Logic:
                 engine=self._engine,
             )
         except Exception as exc:
-            log.error("V2 orchestrator crashed (%s) — falling back to legacy V36.", exc)
+            log.error("V2 orchestrator crashed (%s) — V2 gives up on this base.", exc)
             success = False
 
         if success:
-            return
+            self._skipped_in_a_row = 0
+            return True
+
+        if self._should_skip_instead_of_falling_back():
+            self._skipped_in_a_row += 1
+            log.warning(
+                "V2 gave up and 'skip instead of V36' is on — leaving this "
+                "base without deploying (%d in a row).",
+                self._skipped_in_a_row,
+            )
+            return False
 
         log.warning("V2 orchestrator returned no result — running LEGACY V36 fallback.")
         self._legacy_run(screenshot, mode, target)
+        return True
+
+    def _should_skip_instead_of_falling_back(self) -> bool:
+        """Whether to walk away rather than deploy with the legacy planner.
+
+        The cap is the important half. V2 gives up for reasons that belong
+        to the *bot*, not to the base — a polygon threshold that no longer
+        matches this device makes every single base fail. Without a limit
+        the bot would skip base after base forever, paying the search cost
+        each time and never attacking. After a few in a row it stops being
+        bad luck and starts being a misconfiguration, so we take the ugly
+        attack rather than burn the account's gold on searches.
+        """
+        if not bool(Settings().get("v2_skip_on_fallback", False)):
+            return False
+        cfg = self._orchestrator.attack_rules().get("fallback", {}) or {}
+        limit = max(1, int(cfg.get("max_consecutive_skips", 3)))
+        if self._skipped_in_a_row >= limit:
+            log.warning(
+                "V2 has given up on %d base(s) in a row — that is a setting "
+                "problem, not luck. Attacking with the legacy planner this "
+                "time instead of skipping again.",
+                self._skipped_in_a_row,
+            )
+            self._skipped_in_a_row = 0
+            return False
+        return True
 
     # ── Legacy V36 path (ULTIMATE FALLBACK) ─────────────────────────
     def _legacy_run(self, screenshot: np.ndarray, mode: Mode, target: str) -> None:

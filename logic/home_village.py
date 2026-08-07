@@ -47,6 +47,14 @@ class HomeVillageLogic:
         self._post_deploy_time: float = 0.0
         self._initial_loot: dict[str, int] = {}
 
+        # How many more villages the current random-skip run still owes.
+        # Set when a roll fires, counted down on the villages after it.
+        self._random_skips_left: int = 0
+
+        # True when the base we just left was skipped because V2 could not
+        # read it. Stops the random skip from piling onto that.
+        self._forced_skip_last: bool = False
+
         # Smart Vision V2 — opt-in per-village. Constructed eagerly so the
         # mode flag can flip mid-session without a restart.
         self._v2 = SmartV2Logic(self._profile, self._sr, self._ocr, mode_key="hv")
@@ -92,8 +100,67 @@ class HomeVillageLogic:
             m = self._sr.find_template_by_name(screenshot, "attack_button")
             if m: tap(m[0], m[1])
 
+    # ── Random skip ─────────────────────────────────────────────────────
+    # Taking every village that clears the loot bar is the one habit of this
+    # bot that no human has: a person passes on bases they simply don't feel
+    # like hitting. When the option is on, a roll every so often skips the
+    # next 1-2 villages regardless of loot.
+    #
+    # Only Normal matchmaking reaches this screen — Ranked drops straight
+    # into the battle, so there is nothing to skip there.
+
+    def _random_skip_due(self) -> bool:
+        """True if this village should be passed over just to break rhythm."""
+        if not self._profile.get("hv_random_skip_enabled", False):
+            self._random_skips_left = 0
+            return False
+
+        # The village right after one V2 walked away from is taken no matter
+        # what the dice say. The two kinds of skip are unrelated — one is
+        # deliberate rhythm, the other is the planner failing — and letting
+        # them stack turns "skip a base" into "skip three bases", each one
+        # paying its own search fee. If V2 gives up on this one too it will
+        # skip again on its own; that chain is fine, it just must not be
+        # lengthened by the dice.
+        if self._forced_skip_last:
+            self._forced_skip_last = False
+            log.debug("Random skip suppressed — the previous base was already skipped.")
+            return False
+
+        # Already inside a run that the previous roll started.
+        if self._random_skips_left > 0:
+            self._random_skips_left -= 1
+            return True
+
+        chance = int(self._profile.get("hv_random_skip_chance", 20))
+        if chance <= 0 or random.randint(1, 100) > chance:
+            return False
+
+        low = max(1, int(self._profile.get("hv_random_skip_min", 1)))
+        high = max(low, int(self._profile.get("hv_random_skip_max", 2)))
+        # This village is the first of the run, so the rest is what's left.
+        self._random_skips_left = random.randint(low, high) - 1
+        return True
+
+    def _tap_next(self, screenshot: np.ndarray) -> None:
+        m = self._sr.find_template_by_name(screenshot, "next_button")
+        if m:
+            tap(m[0], m[1])
+
     def _handle_opponent_found(self, screenshot: np.ndarray):
         _s = Settings()
+
+        # Checked before the loot OCR — a village we are going to pass on
+        # anyway is not worth a read.
+        if self._random_skip_due():
+            log.info(
+                "%s⤳ Random skip%s — passing on this village (%d more to go).",
+                C_ELIXIR, C_RESET, self._random_skips_left,
+            )
+            if self._engine is not None:
+                self._engine.record_skip()
+            self._tap_next(screenshot)
+            return
 
         # Skip loot check if user disabled it
         if _s.get("skip_loot_ocr", False):
@@ -120,8 +187,7 @@ class HomeVillageLogic:
             log.info("%s✗ Skip%s (G:%d E:%d)", C_RED, C_RESET, gold, elixir)
             if self._engine is not None:
                 self._engine.record_skip()
-            m = self._sr.find_template_by_name(screenshot, "next_button")
-            if m: tap(m[0], m[1])
+            self._tap_next(screenshot)
 
     # ── Ranked-only helpers ─────────────────────────────────────────────
     # Ranked matchmaking skips the OPPONENT_FOUND scout screen entirely:
@@ -176,6 +242,35 @@ class HomeVillageLogic:
             
             if self._profile.get("retreat_heroes_dead", False):
                 self._check_hero_death_retreat(screenshot)
+
+    def _abandon_base(self, screenshot: np.ndarray):
+        """V2 refused to deploy and the user asked for a new opponent.
+
+        The way out depends on how far in we are, and the two cost very
+        different amounts. On the scouting screen "Next" walks away for the
+        price of the search. Once the battle has started the only exit is
+        surrendering, which spends the attack and the trophies with it —
+        that is the price of not letting the legacy planner dump the army
+        into a base V2 could not read.
+        """
+        self._attack_active = False
+        self._battle_phase_done = False
+        # Take the next base regardless of the dice, and drop any random-skip
+        # run that was still owed — this skip already cost a search.
+        self._forced_skip_last = True
+        self._random_skips_left = 0
+        if self._engine is not None:
+            self._engine.record_attack_cancelled()
+
+        if self._sm.state == GameState.OPPONENT_FOUND:
+            log.info("%sV2 gave up — taking Next to a new base.%s", C_ELIXIR, C_RESET)
+            self._tap_next(screenshot)
+        else:
+            log.info(
+                "%sV2 gave up mid-battle — surrendering to find a new base.%s",
+                C_ELIXIR, C_RESET,
+            )
+            self._end_battle(screenshot)
 
     def _handle_battle_ended(self, screenshot: np.ndarray):
         self._attack_active = False
@@ -374,7 +469,8 @@ class HomeVillageLogic:
         # ── Smart Vision V2 fast path ──────────────────────────────────
         if self._v2.is_enabled():
             log.info("═══ SMART VISION V2 — HV ═══")
-            self._v2.execute(screenshot)
+            if not self._v2.execute(screenshot):
+                self._abandon_base(screenshot)
             return
 
         h, w = screenshot.shape[:2]
