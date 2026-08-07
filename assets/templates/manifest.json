@@ -348,5 +348,14 @@
     "file": "assets\\templates\\troops\\valkyrie.png",
     "width": 71,
     "height": 105
+  },
+  "minion": {
+    "category": "heroes",
+    "label": "Minion",
+    "file": "assets\\templates\\heroes\\minion.png",
+    "width": 87,
+    "height": 113,
+    "screen_w": 1350,
+    "screen_h": 1080
   }
 }
