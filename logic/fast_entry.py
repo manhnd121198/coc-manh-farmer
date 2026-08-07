@@ -44,12 +44,26 @@ def calibrated_label() -> str:
     """How the device itself reports this screen, for the UI."""
     return f"{min(CALIBRATED_DIMS)}x{max(CALIBRATED_DIMS)}"
 
-# (x, y, seconds to wait for the next screen). Verified by tapping them on
-# the device and confirming each screen appeared.
+# (x, y, seconds to wait for the next screen).
+#
+# Each point is the CENTRE of its button, measured by matching the button's
+# own template against a screenshot of the live screen. Centre matters more
+# than it looks: these taps are never verified, so a point near an edge is
+# one layout shift away from landing on the neighbour.
+#
+#   step  button                     box on a 1350x1080 screen   centre
+#   1     Attack!      (home)        x 22..175   y 1008..1053    (98, 1030)
+#   2     Find a Match (multiplayer) x 88..427   y 690..800      (258, 744)
+#   3     Attack!      (army panel)  x 1024..1259 y 768..845     (1141, 806)
+#
+# Step 3 used to be (1093, 777) — 9 px below the top edge of the button and
+# only 7 px under the gem-count button that sits right above it. That is the
+# worst place on this screen to be off by a few pixels: a miss there opens
+# the gem purchase dialog instead of starting the attack.
 STEPS: tuple[tuple[int, int, float], ...] = (
-    (168, 1030, 2.5),   # Attack!            (home village)
-    (320, 712, 2.5),    # Find a Match       (multiplayer panel)
-    (1093, 777, 4.0),   # Attack!            (army panel)
+    (98, 1030, 2.5),    # Attack!            (home village)
+    (258, 744, 2.5),    # Find a Match       (multiplayer panel)
+    (1141, 806, 4.0),   # Attack!            (army panel)
 )
 
 
