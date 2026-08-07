@@ -270,7 +270,7 @@ Phần "làm thế nào" đã tách khỏi phần "làm gì". Rule không tự t
 | `fan_planner.py` | rải quân đều theo hình quạt |
 | `funnel_planner.py` | tính hai điểm funnel hai bên |
 | `perimeter_planner.py` | đường vuốt quanh 4 hành lang mép màn |
-| `ring_sweep_planner.py` | vòng bám polygon; `one_point_per_side()`, `sides_covered()` |
+| `ring_sweep_planner.py` | vòng bám polygon; `pick_drops()`, `one_point_per_side()`, `sides_covered()` |
 | `hero_planner.py` | vị trí thả hero và thời điểm bấm kỹ năng |
 | `spell_planner.py` | vị trí spell theo đường tiến của quân |
 
@@ -287,7 +287,7 @@ hãy chuyển tiếp"** — đây là điều kiện để chuỗi dự phòng h
 | `air_attack` | 30 | số quân `air` ≥ số quân `ground` | rải quân bay theo quạt trên hành lang |
 | `ground_funnel` | 40 | có quân bộ **và** có quân `style: funnel` | tạo hai cánh funnel rồi đẩy giữa |
 | `perimeter_sweep` | 80 | chỉ khi chọn tay | vuốt quanh 4 mép màn; **cần đủ 4 hành lang**, thiếu là bỏ |
-| `ring_sweep` | 85 | chỉ khi chọn tay (`matches()` luôn `True`) | giữ 1 điểm mỗi cạnh của base, dựng từ polygon nên chỉ cần 2 cạnh có chỗ |
+| `ring_sweep` | 85 | chỉ khi chọn tay (`matches()` luôn `True`) | giữ `ring_sweep.hold_points` điểm quanh base (mặc định 4 = mỗi cạnh 1), dựng từ polygon nên chỉ cần 2 cạnh có chỗ |
 | `smart_default` | 90 | mọi trường hợp còn lại | chọn hành lang rộng nhất, thả hỗn hợp |
 
 `priority` chỉ dùng để sắp thứ tự danh sách rule; việc chọn rule thực tế do

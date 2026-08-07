@@ -58,9 +58,16 @@
     "deploy_steps_per_leg": 3
   },
   "ring_sweep": {
-    "_comment": "Pick ONE random point per side of the base and hold it, sides in random order. hold_ms_by_troop is the hold at EACH side as [min,max] ms, re-rolled per side. Size it from the army: a held card empties at roughly 7 troops/second, so hold_ms = troop_count / 4 sides / 7 * 1000 -- 50 troops is ~1800ms, 100 is ~3600ms, 200 is ~7100ms. Too long only wastes battle time; the card stops producing once it is empty. Key by troop name (same key as the card template) and _default covers the rest.",
+    "_comment": "Hold N random points around the base, spread round-robin over the sides in random order. Both knobs are per troop: hold_points_by_troop is how many points that card is emptied into, hold_ms_by_troop is the hold at EACH point as [min,max] ms re-rolled per point. Both key by troop name (same key as the card template), fall back to _default, and hold_points_by_troop falls back again to the flat hold_points. 4 points is one per side; raising it comes back round for a second point per side, lowering it concentrates the army. It cannot exceed points_per_side*4 (the ring size) and multi-finger deploy tops out at 10 fingers. Size the hold from the army: a held card empties at roughly 7 troops/second, so hold_ms = troop_count / hold_points / 7 * 1000 -- at 4 points, 50 troops is ~1800ms, 100 is ~3600ms, 200 is ~7100ms. Fewer points means each one must be held proportionally LONGER or the card is left with troops in it. Too long only wastes battle time; the card stops producing once it is empty.",
     "clearance_px": 45,
     "points_per_side": 4,
+    "hold_points": 4,
+    "hold_points_by_troop": {
+      "_default": 4,
+      "baba": 4,
+      "valkyrie": 2,
+      "dragon": 1
+    },
     "min_valid_points": 6,
     "edge_margin_px": 60,
     "corner_miter": 1.5,

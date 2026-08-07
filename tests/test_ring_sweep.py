@@ -10,6 +10,9 @@ The contract that matters in-game:
   * unlike PerimeterSweep it must NOT require all four screen-edge corridors.
 """
 
+import collections
+import json
+import pathlib
 import unittest
 
 try:
@@ -240,6 +243,141 @@ class RingSweepSideDropsTest(unittest.TestCase):
             len(seen), 1,
             "the same base attacked twice must not give the same sequence",
         )
+
+
+@unittest.skipUnless(_HAVE_CV2, "requires opencv + numpy")
+class RingSweepDropCountTest(unittest.TestCase):
+    """How many points a card is emptied into is configurable."""
+
+    def setUp(self):
+        from logic.skills.ring_sweep_planner import RingSweepPlannerSkill
+        self.plan = RingSweepPlannerSkill()
+        self.centre = (675, 450)
+        self.ring = [
+            (675, 150), (600, 180),      # top
+            (975, 450), (940, 500),      # right
+            (675, 750), (700, 720),      # bottom
+            (375, 450), (410, 400),      # left
+        ]
+
+    def _sides(self, drops):
+        return [self.plan.side_of(self.centre, d) for d in drops]
+
+    def test_the_default_four_is_still_one_per_side(self):
+        drops = self.plan.pick_drops(self.centre, self.ring, 4)
+        self.assertEqual(4, len(drops))
+        self.assertEqual(4, len(set(self._sides(drops))))
+
+    def test_fewer_points_uses_fewer_sides(self):
+        drops = self.plan.pick_drops(self.centre, self.ring, 2)
+        self.assertEqual(2, len(drops))
+        self.assertEqual(2, len(set(self._sides(drops))), "no side twice")
+
+    def test_more_points_comes_back_round_before_repeating_a_side(self):
+        """Six points on a four-sided base is 2+2+1+1, never 3 on one side
+        while another has none."""
+        for _ in range(30):
+            counts = collections.Counter(
+                self._sides(self.plan.pick_drops(self.centre, self.ring, 6)),
+            )
+            self.assertEqual(4, len(counts))
+            self.assertEqual([1, 1, 2, 2], sorted(counts.values()))
+
+    def test_drops_are_never_the_same_point_twice(self):
+        """Two fingers on one pixel is one finger to the game."""
+        for count in (2, 4, 6, 8):
+            drops = self.plan.pick_drops(self.centre, self.ring, count)
+            self.assertEqual(len(drops), len(set(drops)), count)
+
+    def test_asking_for_more_than_the_ring_holds_returns_the_ring(self):
+        drops = self.plan.pick_drops(self.centre, self.ring, 50)
+        self.assertEqual(sorted(self.ring), sorted(drops))
+
+    def test_a_two_sided_base_still_honours_the_count(self):
+        two_sides = [(675, 150), (600, 180), (375, 450), (410, 400)]
+        drops = self.plan.pick_drops(self.centre, two_sides, 4)
+        self.assertEqual(4, len(drops))
+        self.assertEqual({"top", "left"}, set(self._sides(drops)))
+
+    def test_an_empty_ring_plans_nothing(self):
+        self.assertEqual([], self.plan.pick_drops(self.centre, [], 4))
+
+    def test_the_rule_reads_hold_points_from_config(self):
+        """The knob has to reach the planner, not just sit in the file."""
+        source = pathlib.Path("logic/rules/ring_sweep_rule.py").read_text()
+        self.assertIn("wanted = self._hold_points(sweep_cfg, troop)", source)
+        self.assertIn("pick_drops(centre, ring, wanted)", source)
+
+    def test_the_shipped_config_defaults_to_four(self):
+        cfg = json.loads(pathlib.Path("config/v2_attack_rules.json").read_text())
+        sweep = cfg["ring_sweep"]
+        self.assertEqual(4, sweep["hold_points"])
+        self.assertEqual(4, sweep["hold_points_by_troop"]["_default"])
+
+
+class RingSweepHoldPointsTest(unittest.TestCase):
+    """How many points a card is split over is set per troop, because an
+    army is not uniform — one troop wants every side, another wants one."""
+
+    def _points(self, cfg, troop):
+        from logic.rules.ring_sweep_rule import RingSweepRule
+        return RingSweepRule._hold_points(cfg, troop)
+
+    def test_per_troop_value_overrides_the_default(self):
+        cfg = {"hold_points_by_troop": {"_default": 4, "baba": 2, "dragon": 8}}
+        self.assertEqual(2, self._points(cfg, "baba"))
+        self.assertEqual(8, self._points(cfg, "dragon"))
+        self.assertEqual(4, self._points(cfg, "valkyrie"))
+
+    def test_an_old_config_with_only_the_flat_knob_still_works(self):
+        """hold_points shipped before the per-troop table did. A config
+        that only has it must not silently revert to 4."""
+        self.assertEqual(6, self._points({"hold_points": 6}, "baba"))
+
+    def test_the_table_default_wins_over_the_flat_knob(self):
+        cfg = {"hold_points": 6, "hold_points_by_troop": {"_default": 2}}
+        self.assertEqual(2, self._points(cfg, "baba"))
+
+    def test_a_troop_entry_wins_over_both(self):
+        cfg = {"hold_points": 6, "hold_points_by_troop": {"_default": 2, "baba": 8}}
+        self.assertEqual(8, self._points(cfg, "baba"))
+
+    def test_missing_or_broken_config_falls_back_to_four(self):
+        for cfg in ({}, {"hold_points_by_troop": {}},
+                    {"hold_points": "oops"},
+                    {"hold_points_by_troop": {"baba": None}}):
+            self.assertEqual(4, self._points(cfg, "baba"), cfg)
+
+    def test_a_key_that_differs_only_in_case_still_matches(self):
+        """Card templates are lowercase but the config is hand-written.
+        "Dragon" silently getting the default is not a useful failure."""
+        cfg = {"hold_points_by_troop": {"_default": 4, "Dragon": 1}}
+        self.assertEqual(1, self._points(cfg, "dragon"))
+
+    def test_an_exact_key_wins_over_a_case_insensitive_one(self):
+        cfg = {"hold_points_by_troop": {"dragon": 1, "DRAGON": 8}}
+        self.assertEqual(1, self._points(cfg, "dragon"))
+
+    def test_the_shipped_troop_keys_all_exist_as_card_templates(self):
+        """A key with no template is a line of config that does nothing."""
+        cfg = json.loads(pathlib.Path("config/v2_attack_rules.json").read_text())
+        manifest = json.loads(
+            pathlib.Path("assets/templates/manifest.json").read_text(encoding="utf-8"),
+        )
+        known = {name.casefold() for name in manifest}
+        for table in ("hold_points_by_troop", "hold_ms_by_troop"):
+            for key in cfg["ring_sweep"].get(table, {}):
+                if key.startswith("_"):
+                    continue
+                self.assertIn(key.casefold(), known, f"{table}.{key}")
+
+    def test_zero_and_negative_are_clamped_to_one(self):
+        """0 points would tap the card and never deploy it — a troop
+        silently left in the army for the whole battle."""
+        for value in (0, -3):
+            self.assertEqual(
+                1, self._points({"hold_points_by_troop": {"baba": value}}, "baba"),
+            )
 
 
 class RingSweepHoldWindowTest(unittest.TestCase):
