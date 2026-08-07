@@ -155,8 +155,10 @@
     "category": "ui_elements",
     "label": "Reload Button",
     "file": "assets\\templates\\ui_elements\\reload_button.png",
-    "width": 583,
-    "height": 129
+    "width": 235,
+    "height": 94,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "town_hall_18": {
     "category": "buildings",
