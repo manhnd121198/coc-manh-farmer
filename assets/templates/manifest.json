@@ -3,16 +3,16 @@
     "category": "ui_elements",
     "label": "Normal Mode Btn",
     "file": "assets\\templates\\ui_elements\\normal_mode_btn.png",
-    "width": 240,
-    "height": 36,
+    "width": 224,
+    "height": 44,
     "screen_w": 1350,
     "screen_h": 1080
   },
   "next_button": {
     "category": "ui_elements",
     "file": "assets\\templates\\ui_elements\\next_button.png",
-    "width": 232,
-    "height": 113,
+    "width": 246,
+    "height": 105,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -27,8 +27,8 @@
     "category": "ui_elements",
     "label": "Attack Button2",
     "file": "assets\\templates\\ui_elements\\attack_button2.png",
-    "width": 214,
-    "height": 70,
+    "width": 236,
+    "height": 51,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -43,8 +43,8 @@
     "category": "ui_elements",
     "label": "Attack Button",
     "file": "assets\\templates\\ui_elements\\attack_button.png",
-    "width": 153,
-    "height": 45,
+    "width": 154,
+    "height": 48,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -52,8 +52,8 @@
     "category": "ui_elements",
     "label": "End Battle Button",
     "file": "assets\\templates\\ui_elements\\end_battle_button.png",
-    "width": 172,
-    "height": 48,
+    "width": 178,
+    "height": 58,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -62,7 +62,7 @@
     "label": "End Battle Confirm",
     "file": "assets\\templates\\ui_elements\\end_battle_confirm.png",
     "width": 286,
-    "height": 124,
+    "height": 126,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -70,8 +70,8 @@
     "category": "ui_elements",
     "label": "Return Home",
     "file": "assets\\templates\\ui_elements\\return_home.png",
-    "width": 210,
-    "height": 100,
+    "width": 228,
+    "height": 96,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -128,8 +128,8 @@
     "category": "ui_elements",
     "label": "Lot Asseset",
     "file": "assets\\templates\\ui_elements\\lot_asseset.png",
-    "width": 137,
-    "height": 23,
+    "width": 198,
+    "height": 24,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -137,8 +137,8 @@
     "category": "ui_elements",
     "label": "Timer Top Start",
     "file": "assets\\templates\\ui_elements\\timer_top_start.png",
-    "width": 167,
-    "height": 32,
+    "width": 248,
+    "height": 28,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -148,15 +148,16 @@
     "file": "assets\\templates\\ui_elements\\troops_bar.png",
     "width": 1350,
     "height": 129,
-    "screen_w": 1350,
-    "screen_h": 1080
+    "screen_w": 1350
   },
   "reload_button": {
     "category": "ui_elements",
     "label": "Reload Button",
     "file": "assets\\templates\\ui_elements\\reload_button.png",
-    "width": 583,
-    "height": 129
+    "width": 235,
+    "height": 94,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "town_hall_18": {
     "category": "buildings",
@@ -211,22 +212,28 @@
     "category": "builder_base",
     "label": "Bb Find Match",
     "file": "assets\\templates\\builder_base\\bb_find_match.png",
-    "width": 192,
-    "height": 129
+    "width": 154,
+    "height": 106,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bb_battle_hud": {
     "category": "builder_base",
     "label": "Bb Battle Hud",
     "file": "assets\\templates\\builder_base\\bb_battle_hud.png",
-    "width": 336,
-    "height": 120
+    "width": 250,
+    "height": 86,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bb_return_home": {
     "category": "builder_base",
     "label": "Bb Return Home",
     "file": "assets\\templates\\builder_base\\bb_return_home.png",
-    "width": 246,
-    "height": 126
+    "width": 224,
+    "height": 90,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "battle_machine_bb": {
     "category": "heroes",
@@ -253,22 +260,28 @@
     "category": "builder_base",
     "label": "Bb Attack Confirm",
     "file": "assets\\templates\\builder_base\\bb_attack_confirm.png",
-    "width": 433,
-    "height": 177
+    "width": 290,
+    "height": 104,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bb_prep_text": {
     "category": "builder_base",
     "label": "Bb Prep Text",
     "file": "assets\\templates\\builder_base\\bb_prep_text.png",
-    "width": 225,
-    "height": 39
+    "width": 296,
+    "height": 28,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bb_active_text": {
     "category": "builder_base",
     "label": "Bb Active Text",
     "file": "assets\\templates\\builder_base\\bb_active_text.png",
-    "width": 190,
-    "height": 35
+    "width": 244,
+    "height": 28,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bb_troop_slot": {
     "category": "builder_base",
@@ -295,15 +308,17 @@
     "category": "ui_elements",
     "label": "Ranked Mode Btn",
     "file": "assets\\templates\\ui_elements\\ranked_mode_btn.png",
-    "width": 442,
-    "height": 159
+    "width": 360,
+    "height": 160,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "surrender_button": {
     "category": "ui_elements",
     "label": "Surrender Button",
     "file": "assets\\templates\\ui_elements\\surrender_button.png",
-    "width": 176,
-    "height": 52,
+    "width": 178,
+    "height": 54,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -318,8 +333,10 @@
     "category": "ui_elements",
     "label": "Searching Indicator",
     "file": "assets\\templates\\ui_elements\\searching_indicator.png",
-    "width": 291,
-    "height": 225
+    "width": 458,
+    "height": 132,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "dragon": {
     "category": "troops",
@@ -348,5 +365,23 @@
     "file": "assets\\templates\\troops\\valkyrie.png",
     "width": 71,
     "height": 105
+  },
+  "minion": {
+    "category": "heroes",
+    "label": "Minion",
+    "file": "assets\\templates\\heroes\\minion.png",
+    "width": 87,
+    "height": 113,
+    "screen_w": 1350,
+    "screen_h": 1080
+  },
+  "bb_side_label": {
+    "category": "builder_base",
+    "label": "BB Defender/Attacker Label",
+    "file": "assets\\templates\\builder_base\\bb_side_label.png",
+    "width": 146,
+    "height": 26,
+    "screen_w": 1350,
+    "screen_h": 1080
   }
 }
