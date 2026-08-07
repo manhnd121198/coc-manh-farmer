@@ -99,6 +99,7 @@ DEFAULT_ASSETS: dict[str, tuple[str, str]] = {
     # ── Builder Base ────────────────────────────────────────────────────
     "bb_home_indicator":     ("builder_base", "BB Home Indicator"),
     "bb_find_match":         ("builder_base", "BB Find Match Button"),
+    "bb_side_label":         ("builder_base", "BB Defender/Attacker Label"),
     "bb_battle_hud":         ("builder_base", "BB Battle HUD"),
     "bb_stage2_indicator":   ("builder_base", "BB Stage 2 Indicator"),
     "bb_battle_result":      ("builder_base", "BB Battle Result"),
