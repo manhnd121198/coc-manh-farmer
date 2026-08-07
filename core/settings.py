@@ -106,6 +106,11 @@ _DEFAULTS: dict = {
     # root, so it is off by default and falls back on its own.
     "multi_touch_enabled": False,
 
+    # After a V2 rule finishes, read the troop bar again and empty any card
+    # that still has troops on it. Off by default: it judges cards by
+    # colour, and those thresholds need one look at the log per device.
+    "sweep_up_enabled": False,
+
     # Vision toggles
     "skip_loot_ocr": False,
     "skip_timer_ocr": False,
@@ -139,6 +144,11 @@ _DEFAULTS: dict = {
     "v2_decoration_wait": 5.0,
     "v2_rule_hv":         "auto",
     "v2_rule_bb":         "auto",
+
+    # When V2 cannot read the base, walk away and look for another one
+    # instead of attacking with the legacy planner. Capped in
+    # config/v2_attack_rules.json -> fallback.max_consecutive_skips.
+    "v2_skip_on_fallback": False,
 
     # Game Presence
     "game_package": "com.supercell.clashofclans",

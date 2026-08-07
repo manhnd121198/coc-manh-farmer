@@ -186,6 +186,44 @@ class SettingsTab(QWidget):
         self._lbl_multi_touch.setStyleSheet("color: #9e9e9e; padding-left: 22px;")
         vis_lay.addWidget(self._lbl_multi_touch)
 
+        self._chk_sweep_up = QCheckBox(
+            "Thả nốt quân thừa — đánh xong đọc lại thanh quân, thẻ nào còn thì thả tiếp",
+        )
+        self._chk_sweep_up.setToolTip(
+            "Chiến thuật thả theo kế hoạch chứ không theo kết quả: Ring\n"
+            "Sweep giữ mỗi cạnh một khoảng thời gian cố định, giữ ngắn hơn\n"
+            "số quân là còn thừa trên thẻ; thẻ nào không nhận diện được\n"
+            "thì bị bỏ qua luôn. Bật cái này thì đánh xong bot chụp lại\n"
+            "màn hình và thả nốt những thẻ vẫn còn quân.\n\n"
+            "Cách nhận biết thẻ hết quân: CoC làm thẻ xám và tối đi, giống\n"
+            "hệt thẻ hero khi chết — bot đo độ bão hoà màu và độ sáng chứ\n"
+            "không đọc con số trên thẻ.\n\n"
+            "Ngưỡng màu khác nhau theo máy, nên mỗi lần kiểm tra bot đều\n"
+            "in ra số đo được. Xem log một trận rồi chỉnh mục \"sweep_up\"\n"
+            "trong config/v2_attack_rules.json cho khớp máy bạn.",
+        )
+        self._chk_sweep_up.stateChanged.connect(self._on_value_changed)
+        vis_lay.addWidget(self._chk_sweep_up)
+
+        self._chk_skip_on_fallback = QCheckBox(
+            "V2 đọc không ra base thì bỏ, tìm trận khác (thay vì đánh kiểu cũ)",
+        )
+        self._chk_skip_on_fallback.setToolTip(
+            "Khi không dựng được vùng đỏ của base, bình thường bot vẫn đánh\n"
+            "bằng bộ thả cũ: dồn cả đội quân vào một cụm, không theo chiến\n"
+            "thuật nào. Bật cái này thì thay vì đánh như vậy, bot bỏ base\n"
+            "đó và đi tìm trận khác.\n\n"
+            "Giá phải trả khác nhau tuỳ lúc: đang ở màn do thám thì chỉ mất\n"
+            "phí tìm trận; đã vào trận rồi thì phải đầu hàng, mất luôn lượt\n"
+            "đánh và cúp.\n\n"
+            "Bỏ liên tiếp quá 3 base thì bot tự đánh bằng bộ thả cũ —\n"
+            "hỏng liên tục nghĩa là sai cấu hình chứ không phải xui, và bỏ\n"
+            "mãi thì chỉ tốn tiền tìm trận. Sửa số này ở mục \"fallback\"\n"
+            "trong config/v2_attack_rules.json.",
+        )
+        self._chk_skip_on_fallback.stateChanged.connect(self._on_value_changed)
+        vis_lay.addWidget(self._chk_skip_on_fallback)
+
         # Thresholds
         thr_row = QHBoxLayout()
         thr_row.addWidget(QLabel("Độ khớp quân:"))
@@ -386,6 +424,8 @@ class SettingsTab(QWidget):
         self._chk_skip_timer.setChecked(s.get("skip_timer_ocr"))
         self._chk_fast_entry.setChecked(bool(s.get("hv_fast_entry", False)))
         self._chk_multi_touch.setChecked(bool(s.get("multi_touch_enabled", False)))
+        self._chk_sweep_up.setChecked(bool(s.get("sweep_up_enabled", False)))
+        self._chk_skip_on_fallback.setChecked(bool(s.get("v2_skip_on_fallback", False)))
         self._spin_troop_thr.setValue(s.get("vision_troop_threshold"))
         self._spin_ui_thr.setValue(s.get("vision_ui_threshold"))
         self._spin_building_thr.setValue(s.get("vision_building_threshold"))
@@ -418,6 +458,8 @@ class SettingsTab(QWidget):
         s.set("skip_timer_ocr", self._chk_skip_timer.isChecked())
         s.set("hv_fast_entry", self._chk_fast_entry.isChecked())
         s.set("multi_touch_enabled", self._chk_multi_touch.isChecked())
+        s.set("sweep_up_enabled", self._chk_sweep_up.isChecked())
+        s.set("v2_skip_on_fallback", self._chk_skip_on_fallback.isChecked())
         s.set("vision_troop_threshold", self._spin_troop_thr.value())
         s.set("vision_ui_threshold", self._spin_ui_thr.value())
         s.set("vision_building_threshold", self._spin_building_thr.value())
@@ -551,6 +593,7 @@ class SettingsTab(QWidget):
             self._spin_swipe, self._spin_tick,
             self._chk_skip_loot, self._chk_skip_timer,
             self._chk_fast_entry, self._chk_multi_touch,
+            self._chk_sweep_up, self._chk_skip_on_fallback,
             self._spin_troop_thr, self._spin_ui_thr,
             self._spin_building_thr, self._spin_ocr_interval,
             self._spin_hero_delay, self._spin_jitter,

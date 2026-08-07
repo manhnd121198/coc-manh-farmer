@@ -127,5 +127,17 @@
     "invert_x": false,
     "invert_y": false,
     "touch_major": 60
+  },
+  "sweep_up": {
+    "_comment": "Wiring for the 'Deploy leftover troops' switch in Settings. After a rule finishes, the troop bar is read again and any card that still looks live is emptied onto the ring. A card is judged EMPTY only when BOTH its mean saturation and mean brightness fall below the values here -- CoC greys an emptied card out, the same signal the hero-death sensor uses. These are per-device: every check logs the sat/val it measured, so watch one attack and set them between the two clusters. max_rounds caps the sweep so a card misread as full cannot hold the bot in the battle.",
+    "max_rounds": 2,
+    "hold_ms": 4000,
+    "empty_saturation": 60,
+    "empty_brightness": 140,
+    "card_sample_px": 22
+  },
+  "fallback": {
+    "_comment": "Caps the 'skip instead of falling back to V36' switch in Settings. V2 gives up for reasons that belong to the bot rather than to the base -- a polygon threshold that no longer matches this device fails on every base alike -- so an uncapped skip would walk away from base after base, paying the search fee each time and never attacking. After this many skips in a row the bot attacks with the legacy planner instead.",
+    "max_consecutive_skips": 3
   }
 }

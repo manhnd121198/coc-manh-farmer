@@ -34,6 +34,7 @@ from logic.skills.human_touch import HumanTouchSkill
 from logic.skills.perimeter_planner import PerimeterPlannerSkill
 from logic.skills.ring_sweep_planner import RingSweepPlannerSkill
 from logic.skills.spell_planner import SpellPlannerSkill
+from vision.skills.card_state import CardStateSkill
 from vision.skills.corner_selector import CornerSelectorSkill
 from vision.skills.isometric_grid import IsometricGridSkill
 from vision.skills.obstacle_detector import ObstacleDetectorSkill
@@ -50,6 +51,7 @@ class SkillBundle:
     obstacle:   ObstacleDetectorSkill
     target:     TargetLocatorSkill
     corner:     CornerSelectorSkill
+    card:       CardStateSkill
     touch:      HumanTouchSkill
     fan:        FanPlannerSkill
     funnel:     FunnelPlannerSkill
