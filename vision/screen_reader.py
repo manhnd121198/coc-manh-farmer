@@ -582,6 +582,15 @@ class ScreenReader:
         if f(screenshot, "bb_return_home", 0.80):    return GameState.BATTLE_ENDED
         if f(screenshot, "bb_battle_result", 0.80):  return GameState.BATTLE_ENDED
 
+        # Every other in-battle marker below is shared with the Home
+        # Village: both villages draw the same red surrender button, the
+        # same "battle ends in" timer and the same damage panel, in the
+        # same places. The defender/attacker header is the one thing only
+        # a Builder Base fight has, so it must be asked FIRST — otherwise
+        # a BB battle answers IN_BATTLE and the home-village logic starts
+        # planning an attack on a base it cannot see.
+        if f(screenshot, "bb_side_label", 0.80):     return GameState.BB_BATTLE
+
         # The "Available Loot" panel is on screen while scouting and while
         # attacking. It must be judged at the normal UI confidence: at 0.35
         # it also matched the battle-result screen (0.43) and reported
