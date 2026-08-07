@@ -86,8 +86,10 @@
     "category": "heroes",
     "label": "Archer Queen",
     "file": "assets\\templates\\heroes\\archer_queen.png",
-    "width": 164,
-    "height": 225
+    "width": 85,
+    "height": 116,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "town_hall": {
     "category": "buildings",
@@ -239,8 +241,10 @@
     "category": "heroes",
     "label": "Battle Machine Bb",
     "file": "assets\\templates\\heroes\\battle_machine_bb.png",
-    "width": 166,
-    "height": 165
+    "width": 109,
+    "height": 137,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bomber_bb": {
     "category": "troops",
@@ -253,8 +257,10 @@
     "category": "troops",
     "label": "Witch Bb",
     "file": "assets\\templates\\troops\\witch_bb.png",
-    "width": 166,
-    "height": 166
+    "width": 102,
+    "height": 106,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bb_attack_confirm": {
     "category": "builder_base",

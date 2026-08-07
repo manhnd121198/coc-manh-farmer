@@ -16,10 +16,9 @@
   "deploy_timer_seconds": 95,
   "hv_match_mode": "normal",
   "attack_strategy": "smart_target",
-  "macro_file": "",
+  "macro_file": "recordings\\hv_attack_macro.json",
   "selected_troops": [
-    "baba",
-    "valkyrie"
+    "dragon"
   ],
   "selected_heroes": [
     "grand_warden",
@@ -37,14 +36,10 @@
   "bb_deploy_timer_enabled": false,
   "bb_deploy_timer_seconds": 90,
   "bb_selected_troops": [
-    "giant_bb",
-    "bomber_bb",
-    "witch_bb",
-    "peka_bb"
+    "witch_bb"
   ],
   "bb_selected_heroes": [
-    "battle_machine_bb",
-    "copter_bb"
+    "battle_machine_bb"
   ],
   "hv_entry_sequence": [],
   "bb_entry_sequence": []
