@@ -469,9 +469,12 @@ class SettingsTab(QWidget):
 
         if not multi_touch.have_root(refresh=True):
             self._lbl_multi_touch.setText(
-                "✗ Máy không cho chạy quyền root — bot sẽ giữ lần lượt từng "
-                "cạnh như cũ. LDPlayer: Cài đặt → Khác → bật Root, rồi khởi "
-                "động lại giả lập.",
+                "✗ Không cách nào chạy được quyền root — bot giữ lần lượt "
+                "từng cạnh như cũ.\n"
+                f"Đã thử: {multi_touch.last_root_attempts()}\n"
+                "LDPlayer: Cài đặt → Mục khác → bật Quyền Root → bấm Lưu → "
+                "TẮT HẲN rồi mở lại giả lập (bật xong không khởi động lại "
+                "thì adb vẫn chạy quyền cũ).",
             )
             self._lbl_multi_touch.setStyleSheet(
                 "color: #e0a030; padding-left: 22px;")
@@ -490,7 +493,8 @@ class SettingsTab(QWidget):
 
         node, raw_max = found
         self._lbl_multi_touch.setText(
-            f"✓ Có root, dùng {node} (toạ độ 0..{raw_max}). "
+            f"✓ Có root (qua '{multi_touch.root_mode()}'), dùng {node} "
+            f"(toạ độ 0..{raw_max}). "
             "CHƯA hiệu chỉnh chiều toạ độ — xem docs/multi-finger-deploy.md "
             "trước khi đánh thật, sai chiều là bấm nhầm chỗ.",
         )

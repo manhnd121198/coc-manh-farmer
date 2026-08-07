@@ -53,11 +53,35 @@ _ABS_MT_TRACKING_ID = 57
 # silently by the driver, which reads as "some troops never deployed".
 MAX_SLOTS = 10
 
-# How to reach uid 0 on this device: [] when the adb shell already is
-# root (the usual case on emulators), ["su", "-c"] when it needs asking,
-# None when it cannot be reached at all.
-_root_prefix: list[str] | None = None
+
+def _quote(command: str) -> str:
+    """Wrap a command so the device's ``su`` receives it as ONE argument.
+
+    ``adb shell`` does not preserve argv: it joins everything with spaces
+    and hands the result to the device shell to re-parse. So passing
+    ``["su", "-c", "a; b"]`` arrives as ``su -c a; b`` — ``su`` runs only
+    ``a`` as root and the device shell runs ``b`` as the shell user. For a
+    gesture that means the first sendevent succeeds and every following
+    one is denied, leaving a finger pressed down with nothing to lift it.
+    """
+    return "'" + command.replace("'", """'"'"'""") + "'"
+
+
+# How a command is escalated to uid 0 on this device. The right form is
+# not predictable: emulators usually hand out a root adb shell outright,
+# Magisk-style su takes ``-c``, and the toolbox su that ships with many
+# Android images takes a uid instead and no ``-c`` at all.
+ROOT_MODES: tuple[tuple[str, str], ...] = (
+    ("shell", "{cmd}"),                     # adb shell is already root
+    ("su -c", "su -c {quoted}"),            # Magisk / classic su
+    ("su 0",  "su 0 sh -c {quoted}"),       # toolbox su: su <uid> <argv…>
+)
+
+# Which of ROOT_MODES works here, or None when none of them do.
+_root_mode: str | None = None
 _probed_root = False
+# What each mode answered on the last probe, so the UI can show why.
+_last_attempts = ""
 
 # Auto-detected touchscreen node and its coordinate ceiling.
 _detected: tuple[str, int] | None = None
@@ -80,42 +104,63 @@ def _cfg(config: dict | None) -> dict:
     }
 
 
+def _as_root(command: str, mode: str) -> str:
+    """``command`` rewritten to run as root under the given mode."""
+    template = dict(ROOT_MODES)[mode]
+    return template.format(cmd=command, quoted=_quote(command))
+
+
 def _shell(command: str, timeout: int = 15):
     """Run a shell command as root, however this device grants it."""
-    return _run(["shell"] + (_root_prefix or []) + [command], timeout=timeout)
+    if _root_mode is None:
+        raise RuntimeError("no root mode established")
+    return _run(["shell", _as_root(command, _root_mode)], timeout=timeout)
+
+
+def root_mode() -> str | None:
+    """Which escalation worked, for the UI to report. None until probed."""
+    return _root_mode
 
 
 def have_root(refresh: bool = False) -> bool:
     """True when shell commands can run as uid 0.
 
-    Tries the plain shell first: emulators (LDPlayer, MEmu, BlueStacks)
-    hand out a root shell directly, and going through ``su`` there is at
-    best pointless and at worst missing. Only then does it ask ``su``,
-    checking that it really returns 0 — a device can ship an ``su`` that
-    prompts and then denies, which would leave gestures silently doing
-    nothing.
+    Each mode is verified by actually running ``id -u`` through it rather
+    than by looking for an ``su`` binary — a device can ship an ``su``
+    that exists, prompts, and then denies, which would leave every
+    gesture silently doing nothing.
     """
-    global _root_prefix, _probed_root
+    global _root_mode, _probed_root, _last_attempts
     if _probed_root and not refresh:
-        return _root_prefix is not None
+        return _root_mode is not None
     _probed_root = True
-    _root_prefix = None
-    for prefix in ([], ["su", "-c"]):
+    _root_mode = None
+    attempts: list[str] = []
+    for mode, _template in ROOT_MODES:
         try:
-            done = _run(["shell"] + prefix + ["id -u"], timeout=10)
+            done = _run(["shell", _as_root("id -u", mode)], timeout=10)
             out = (done.stdout or b"").decode("utf-8", "replace").strip()
+            err = (done.stderr or b"").decode("utf-8", "replace").strip()
         except Exception as exc:
-            log.debug("root probe (%s) failed: %s", prefix or "shell", exc)
+            attempts.append(f"{mode}: {exc}")
             continue
         if out and out.splitlines()[-1].strip() == "0":
-            _root_prefix = prefix
-            log.info(
-                "Multi-touch: root available via %s.",
-                "the adb shell itself" if not prefix else "su",
-            )
+            _root_mode = mode
+            _last_attempts = f"{mode}: uid 0"
+            log.info("Multi-touch: running as root via '%s'.", mode)
             return True
-    log.info("Multi-touch unavailable: no way to run commands as uid 0.")
+        attempts.append(f"{mode}: {out or err or 'no output'}")
+    _last_attempts = "; ".join(attempts)
+    log.info(
+        "Multi-touch unavailable — nothing returned uid 0. Tried %s.",
+        _last_attempts,
+    )
     return False
+
+
+def last_root_attempts() -> str:
+    """What each mode answered on the last probe, for the UI."""
+    return _last_attempts
 
 
 def touch_device(cfg: dict, refresh: bool = False) -> tuple[str, int] | None:
@@ -132,7 +177,10 @@ def touch_device(cfg: dict, refresh: bool = False) -> tuple[str, int] | None:
     if _detected is not None and not refresh:
         return _detected
     try:
-        done = _run(["shell", "getevent -pl"], timeout=20)
+        # As root: listing input devices reads /dev/input, which the shell
+        # user cannot open on a device where this feature is needed at all.
+        done = (_shell("getevent -pl", timeout=20) if _root_mode is not None
+                else _run(["shell", "getevent -pl"], timeout=20))
         text = (done.stdout or b"").decode("utf-8", "replace")
     except Exception as exc:
         log.error("Multi-touch: could not list input devices: %s", exc)

@@ -31,9 +31,10 @@ def _cfg(**over):
 
 
 def _reset_probes():
-    multi_touch._root_prefix = None
+    multi_touch._root_mode = None
     multi_touch._probed_root = False
     multi_touch._detected = None
+    multi_touch._last_attempts = ""
 
 
 class MultiTouchAvailabilityTest(unittest.TestCase):
@@ -72,7 +73,7 @@ class MultiTouchAvailabilityTest(unittest.TestCase):
         with mock.patch.object(multi_touch, "_run", return_value=done) as run:
             self.assertTrue(multi_touch.have_root(refresh=True))
         self.assertEqual(["shell", "id -u"], run.call_args_list[0].args[0])
-        self.assertEqual([], multi_touch._root_prefix)
+        self.assertEqual("shell", multi_touch._root_mode)
 
     def test_falls_back_to_su_when_the_shell_is_not_root(self):
         _reset_probes()
@@ -80,7 +81,45 @@ class MultiTouchAvailabilityTest(unittest.TestCase):
                 mock.Mock(stdout=b"0\n", stderr=b"", returncode=0)]
         with mock.patch.object(multi_touch, "_run", side_effect=outs):
             self.assertTrue(multi_touch.have_root(refresh=True))
-        self.assertEqual(["su", "-c"], multi_touch._root_prefix)
+        self.assertEqual("su -c", multi_touch._root_mode)
+
+    def test_a_multi_command_gesture_stays_inside_su(self):
+        """adb shell does not preserve argv — it joins everything and lets
+        the device shell re-parse. Unquoted, `su -c a; b` runs only `a` as
+        root and `b` as the shell user, so a gesture would press a finger
+        down and then be denied the release."""
+        wrapped = multi_touch._as_root("down; sleep 1; up", "su -c")
+        self.assertEqual("su -c 'down; sleep 1; up'", wrapped)
+        self.assertEqual(
+            "su 0 sh -c 'down; sleep 1; up'",
+            multi_touch._as_root("down; sleep 1; up", "su 0"),
+        )
+        self.assertEqual("down; sleep 1; up",
+                         multi_touch._as_root("down; sleep 1; up", "shell"))
+
+    def test_toolbox_su_is_tried_when_dash_c_is_not_supported(self):
+        """Many Android images ship a toolbox su that takes a uid and no
+        -c at all; without this mode a rooted emulator reads as un-rooted."""
+        _reset_probes()
+        outs = [mock.Mock(stdout=b"2000\n", stderr=b"", returncode=0),
+                mock.Mock(stdout=b"", stderr=b"su: invalid uid/gid '-c'", returncode=1),
+                mock.Mock(stdout=b"0\n", stderr=b"", returncode=0)]
+        with mock.patch.object(multi_touch, "_run", side_effect=outs):
+            self.assertTrue(multi_touch.have_root(refresh=True))
+        self.assertEqual("su 0", multi_touch._root_mode)
+
+    def test_a_failed_probe_records_what_each_mode_said(self):
+        """Without this the UI can only say 'no root' and the user has
+        nothing to act on."""
+        _reset_probes()
+        outs = [mock.Mock(stdout=b"2000\n", stderr=b"", returncode=0),
+                mock.Mock(stdout=b"", stderr=b"su: not found", returncode=1),
+                mock.Mock(stdout=b"", stderr=b"su: not found", returncode=1)]
+        with mock.patch.object(multi_touch, "_run", side_effect=outs):
+            self.assertFalse(multi_touch.have_root(refresh=True))
+        report = multi_touch.last_root_attempts()
+        self.assertIn("2000", report)
+        self.assertIn("su: not found", report)
 
     def test_root_probe_survives_a_dead_adb(self):
         _reset_probes()
@@ -157,7 +196,7 @@ class EventSequenceTest(unittest.TestCase):
     def setUp(self):
         _reset_probes()
         multi_touch._probed_root = True
-        multi_touch._root_prefix = []
+        multi_touch._root_mode = "shell"
         self.addCleanup(_reset_probes)
         self.done = mock.Mock(stdout=b"", stderr=b"", returncode=0)
 

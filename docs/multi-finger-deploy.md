@@ -170,10 +170,19 @@ Then tick the Settings checkbox.
 
 ## Troubleshooting
 
-**"no way to run commands as uid 0"** — `adb shell id -u` returns 2000 and
-`su` is missing or denies. On LDPlayer, enable root in
-Settings → Other settings → Root permission, then restart the emulator. On a
-phone, grant the shell root in Magisk when it prompts.
+**"Không cách nào chạy được quyền root"** — the probe tries three
+escalations and the message lists what each one answered:
+
+| mode | command sent | typical device |
+|---|---|---|
+| `shell` | `adb shell id -u` | emulator with a root adb daemon |
+| `su -c` | `adb shell su -c 'id -u'` | Magisk, classic su |
+| `su 0` | `adb shell su 0 sh -c 'id -u'` | toolbox su (takes a uid, no `-c`) |
+
+On LDPlayer: Cài đặt → Mục khác → **Quyền Root** on → **Lưu** → then close
+the emulator completely and reopen it. Toggling without a full restart
+leaves adbd running with the old permissions, so the probe still sees uid
+2000. On a phone, grant the shell root in Magisk when it prompts.
 
 **Nothing happens, no error in the log** — writing to the wrong input node
 is accepted silently. Re-run step 2 and pin `event_device`.
