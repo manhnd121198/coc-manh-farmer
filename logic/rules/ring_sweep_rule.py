@@ -77,15 +77,31 @@ class RingSweepRule(AirAttackRule):
         is worth root.
         """
         cfg = ctx.config
-        if multi_touch.available(cfg):
-            held = multi_touch.hold_all(
-                drops, self._hold_window_ms(sweep_cfg, troop), cfg,
-            )
-            if held:
-                return
-            log.warning(
-                "RingSweep: multi-touch hold failed — falling back to "
-                "one side at a time.",
+        # Say which gesture is about to run, every time. The two paths look
+        # identical from outside — the attack happens either way — so
+        # without this the only way to tell whether the multi-finger switch
+        # is doing anything is to count troops on the far side of the base.
+        if multi_touch.enabled():
+            if multi_touch.available(cfg):
+                held = multi_touch.hold_all(
+                    drops, self._hold_window_ms(sweep_cfg, troop), cfg,
+                )
+                if held:
+                    return
+                log.warning(
+                    "RingSweep: multi-touch hold failed — holding one side "
+                    "at a time instead.",
+                )
+            else:
+                log.warning(
+                    "RingSweep: multi-finger deploy is ON but this device "
+                    "cannot do it (no root) — holding one side at a time.",
+                )
+        else:
+            log.info(
+                "RingSweep: multi-finger deploy is OFF — holding one side "
+                "at a time. Turn it on in Settings to press all %d together.",
+                len(drops),
             )
         for x, y in drops:
             if self._interrupted(ctx):

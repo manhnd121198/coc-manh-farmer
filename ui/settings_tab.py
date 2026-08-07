@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
     QComboBox, QCheckBox, QDoubleSpinBox, QSpinBox,
     QSlider, QPushButton, QScrollArea, QFrame, QLineEdit,
+    QApplication,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -161,7 +162,29 @@ class SettingsTab(QWidget):
             "config/v2_attack_rules.json, mục \"multi_touch\".",
         )
         self._chk_multi_touch.stateChanged.connect(self._on_value_changed)
-        vis_lay.addWidget(self._chk_multi_touch)
+
+        # Ticking the box is not the same as the feature working: it needs
+        # root and a writable touchscreen node, and when either is missing
+        # the gesture falls back silently — the attack still runs, just one
+        # finger at a time, and the two look identical from outside. The
+        # check is a button rather than automatic because it talks to the
+        # device, and at start-up there may not be one connected yet.
+        mt_row = QHBoxLayout()
+        mt_row.addWidget(self._chk_multi_touch)
+        self._btn_multi_touch = QPushButton("Kiểm tra")
+        self._btn_multi_touch.setToolTip(
+            "Hỏi thiết bị xem có chạy được quyền root và tìm thấy màn hình\n"
+            "cảm ứng không. Cần thiết bị đang kết nối.",
+        )
+        self._btn_multi_touch.clicked.connect(self._probe_multi_touch)
+        mt_row.addWidget(self._btn_multi_touch)
+        mt_row.addStretch()
+        vis_lay.addLayout(mt_row)
+
+        self._lbl_multi_touch = QLabel("")
+        self._lbl_multi_touch.setWordWrap(True)
+        self._lbl_multi_touch.setStyleSheet("color: #9e9e9e; padding-left: 22px;")
+        vis_lay.addWidget(self._lbl_multi_touch)
 
         # Thresholds
         thr_row = QHBoxLayout()
@@ -427,6 +450,71 @@ class SettingsTab(QWidget):
     def _on_value_changed(self, *_) -> None:
         self._save_values()
 
+    def _probe_multi_touch(self, *_) -> None:
+        """Say straight away whether the switch can actually do anything.
+
+        Checked on the box itself rather than left to a battle-time log
+        line, because the fallback is silent: without root the attack
+        still runs, just one finger at a time, and the two look identical
+        from outside.
+        """
+        if not self._chk_multi_touch.isChecked():
+            self._lbl_multi_touch.setText("")
+            return
+
+        self._lbl_multi_touch.setText("Đang kiểm tra root…")
+        QApplication.processEvents()      # paint before the ADB round-trip
+
+        from core import multi_touch
+
+        if not multi_touch.have_root(refresh=True):
+            self._lbl_multi_touch.setText(
+                "✗ Máy không cho chạy quyền root — bot sẽ giữ lần lượt từng "
+                "cạnh như cũ. LDPlayer: Cài đặt → Khác → bật Root, rồi khởi "
+                "động lại giả lập.",
+            )
+            self._lbl_multi_touch.setStyleSheet(
+                "color: #e0a030; padding-left: 22px;")
+            return
+
+        cfg = multi_touch._cfg(self._multi_touch_config())
+        found = multi_touch.touch_device(cfg, refresh=True)
+        if found is None:
+            self._lbl_multi_touch.setText(
+                "✗ Có root nhưng không tìm thấy thiết bị cảm ứng nào. Chỉ "
+                "định tay event_device trong config/v2_attack_rules.json.",
+            )
+            self._lbl_multi_touch.setStyleSheet(
+                "color: #e0a030; padding-left: 22px;")
+            return
+
+        node, raw_max = found
+        self._lbl_multi_touch.setText(
+            f"✓ Có root, dùng {node} (toạ độ 0..{raw_max}). "
+            "CHƯA hiệu chỉnh chiều toạ độ — xem docs/multi-finger-deploy.md "
+            "trước khi đánh thật, sai chiều là bấm nhầm chỗ.",
+        )
+        self._lbl_multi_touch.setStyleSheet(
+            "color: #5cb85c; padding-left: 22px;")
+
+    @staticmethod
+    def _multi_touch_config() -> dict:
+        """The multi_touch block, read straight from disk.
+
+        Settings does not carry it — it lives with the other V2 tunables
+        so it can be hot-reloaded — and this probe must not depend on a
+        running orchestrator.
+        """
+        import json
+        from pathlib import Path
+
+        path = (Path(__file__).resolve().parent.parent
+                / "config" / "v2_attack_rules.json")
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
     def _on_reset(self) -> None:
         self._settings.reset()
         self._load_values()
@@ -438,11 +526,27 @@ class SettingsTab(QWidget):
         self._preset_desc.setText(p.get("description", ""))
 
     def _all_widgets(self):
+        """Every control _load_values touches.
+
+        A control missing from this list keeps its signals live while
+        values are being loaded, so setting it fires _save_values in the
+        middle of the load. That save reads the controls loaded LATER in
+        the same pass, which still hold the values Qt gave them at
+        construction — for a spin box, its minimum. The freshly loaded
+        settings are then overwritten by those minimums and the load
+        continues reading what it just clobbered.
+
+        That is how the vision thresholds reset themselves to exactly
+        0.10 / 0.40 / 0.20 — the three spin-box minimums — every time the
+        Settings tab was opened, and how the multi-finger switch turned
+        itself back off after being ticked.
+        """
         return [
             self._combo_preset,
             self._spin_tap_min, self._spin_tap_max,
             self._spin_swipe, self._spin_tick,
             self._chk_skip_loot, self._chk_skip_timer,
+            self._chk_fast_entry, self._chk_multi_touch,
             self._spin_troop_thr, self._spin_ui_thr,
             self._spin_building_thr, self._spin_ocr_interval,
             self._spin_hero_delay, self._spin_jitter,
