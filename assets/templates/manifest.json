@@ -349,8 +349,10 @@
     "category": "troops",
     "label": "Baba",
     "file": "assets\\templates\\troops\\baba.png",
-    "width": 74,
-    "height": 103
+    "width": 76,
+    "height": 97,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "vake": {
     "category": "troops",
@@ -363,8 +365,10 @@
     "category": "troops",
     "label": "Valkyrie",
     "file": "assets\\templates\\troops\\valkyrie.png",
-    "width": 71,
-    "height": 105
+    "width": 76,
+    "height": 97,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "minion": {
     "category": "heroes",

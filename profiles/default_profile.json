@@ -15,7 +15,8 @@
   "macro_file": "",
   "selected_troops": [
     "baba",
-    "valkyrie"
+    "valkyrie",
+    "dragon"
   ],
   "selected_heroes": [
     "grand_warden",
@@ -24,7 +25,7 @@
     "royal_champion"
   ],
   "selected_spells": [],
-  "bb_attack_mode": "ranked",
+  "bb_attack_mode": "t\u1eadp luy\u1ec7n",
   "bb_attack_strategy": "smart_target",
   "bb_macro_file": "",
   "bb_troop_abilities": true,
