@@ -18,15 +18,11 @@
   "attack_strategy": "smart_target",
   "macro_file": "recordings\\hv_attack_macro.json",
   "selected_troops": [
+    "baba",
+    "valkyrie",
     "dragon"
   ],
-  "selected_heroes": [
-    "grand_warden",
-    "archer_queen",
-    "barbarian_king",
-    "royal_champion",
-    "minion"
-  ],
+  "selected_heroes": [],
   "selected_spells": [],
   "bb_attack_mode": "t\u1eadp luy\u1ec7n",
   "bb_attack_strategy": "smart_target",

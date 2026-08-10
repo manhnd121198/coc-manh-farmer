@@ -88,7 +88,11 @@
     }
   },
   "hero_ability": {
-    "trigger_after_engagement_sec": 2.0,
+    "_comment": "trigger_after_engagement_sec là khoảng chờ sau khi quân đã xuống rồi mới double-tap thẻ hero để kích kỹ năng. Ghi [min,max] giây, roll lại mỗi trận nên không trận nào kích đúng cùng một nhịp; ghi một số trần vẫn chạy và hiểu là chờ cố định. Đặt thành \"auto\" (hoặc null) thì bot không bấm thẻ nữa -- game sẽ tự phát kỹ năng lúc hero sắp hết máu, muộn hơn bấm tay nhưng là nhịp của chính con hero và không phí kỹ năng lên con hero còn đầy máu. Khoảng chờ thì vẫn diễn ra ở cả hai trường hợp: spell thả sau đó cần quân đã giao chiến rồi, nên để \"auto\" thì nó rơi về dải mặc định 3-5s. double_tap_gap_ms là khoảng cách giữa hai cái tap -- nhanh quá thì game đọc thành một tap, chậm quá thì đọc thành hai lần chọn thẻ. File này phải lưu bằng UTF-8.",
+    "trigger_after_engagement_sec": [
+      3.0,
+      5.0
+    ],
     "double_tap_gap_ms": 80
   },
   "funnel": {

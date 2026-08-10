@@ -1,7 +1,7 @@
 {
   "_comment": "Per-spell strategy. placement ∈ {ahead,on_army,on_target,on_wall,inside_base_random,inside_base_ring}. timing ∈ {immediate,after_engage,when_in_range}.",
-  "rage_spell":         {"placement": "ahead",     "timing": "after_engage", "path_fraction": 0.65, "drop_count": 1},
-  "rage":               {"placement": "ahead",     "timing": "after_engage", "path_fraction": 0.65, "drop_count": 1},
+  "rage_spell":         {"placement": "ahead",     "timing": "after_engage", "path_fraction": 0.65, "path_fraction_step": 0.10, "drop_count": 4},
+  "rage":               {"placement": "ahead",     "timing": "after_engage", "path_fraction": 0.65, "path_fraction_step": 0.10, "drop_count": 4},
   "heal_spell":         {"placement": "on_army",   "timing": "after_engage", "path_fraction": 0.35, "drop_count": 1},
   "heal":               {"placement": "on_army",   "timing": "after_engage", "path_fraction": 0.35, "drop_count": 1},
   "freeze_spell":       {"placement": "on_target", "timing": "when_in_range",

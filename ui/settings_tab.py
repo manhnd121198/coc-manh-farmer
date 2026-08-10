@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
     QComboBox, QCheckBox, QDoubleSpinBox, QSpinBox,
     QSlider, QPushButton, QScrollArea, QFrame, QLineEdit,
-    QApplication,
+    QApplication, QMessageBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -27,8 +27,21 @@ class SettingsTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._settings = Settings()
+        self._engine = None
         self._init_ui()
         self._load_values()
+
+    def set_engine(self, engine) -> None:
+        """MainWindow gắn engine đang chạy vào để nút Chạy thử dùng được."""
+        self._engine = engine
+        if engine is not None and hasattr(engine, "session_note"):
+            engine.session_note.connect(self._lbl_cycle_status.setText)
+            # Cùng một signal chạy cả hai nhãn: engine chỉ có một đường
+            # báo tiến độ, và người dùng đang nhìn nhãn nào thì thấy nhãn đó.
+            engine.session_note.connect(self._lbl_emu_status.setText)
+        else:
+            self._lbl_cycle_status.setText("")
+            self._lbl_emu_status.setText("")
 
     # ═══════════════════════════════════════════════════════════════════
     #  UI
@@ -296,6 +309,14 @@ class SettingsTab(QWidget):
         self._spin_hero_delay.setRange(1.0, 30.0)
         self._spin_hero_delay.setSingleStep(0.5)
         self._spin_hero_delay.setDecimals(1)
+        self._spin_hero_delay.setToolTip(
+            "Giá trị dự phòng. Thời gian chờ thật lấy từ\n"
+            "config/v2_attack_rules.json → hero_ability →\n"
+            "trigger_after_engagement_sec, mặc định random 3-5 giây mỗi\n"
+            "trận. Ô này chỉ dùng khi mục đó bị xoá khỏi config.\n"
+            "Đặt mục đó thành \"auto\" thì bot không bấm kỹ năng nữa —\n"
+            "để game tự phát khi hero sắp hết máu.",
+        )
         self._spin_hero_delay.valueChanged.connect(self._on_value_changed)
         r4.addWidget(self._spin_hero_delay)
 
@@ -350,7 +371,120 @@ class SettingsTab(QWidget):
         gi_row.addStretch()
         game_lay.addLayout(gi_row)
 
+        emu_row = QHBoxLayout()
+        self._chk_emu_restart = QCheckBox("Giả lập treo thì tự tắt hẳn rồi bật lại")
+        self._chk_emu_restart.setToolTip(
+            "Khi giả lập treo, ADB vẫn báo 'device' vì nó chỉ hỏi server\n"
+            "trên máy tính chứ không hỏi máy ảo — bot không tự biết được.\n"
+            "Bật cái này thì sau vài lần chụp màn hình thất bại liên tiếp,\n"
+            "bot gọi ldconsole.exe tắt hẳn máy ảo rồi bật lại.\n\n"
+            "LƯU Ý: máy ảo bị đóng thật, mọi thứ đang mở trong đó mất hết.",
+        )
+        self._chk_emu_restart.stateChanged.connect(self._on_value_changed)
+        emu_row.addWidget(self._chk_emu_restart)
+
+        emu_row.addWidget(QLabel("Tên máy ảo:"))
+        self._edit_emu_name = QLineEdit()
+        self._edit_emu_name.setPlaceholderText("để trống = dùng index 0")
+        self._edit_emu_name.setToolTip(
+            "Tên máy ảo trong LDPlayer. Nên điền: thêm hoặc xoá một máy ảo\n"
+            "là index xô hết, và lúc đó bot sẽ khởi động lại nhầm máy.",
+        )
+        self._edit_emu_name.textChanged.connect(self._on_value_changed)
+        emu_row.addWidget(self._edit_emu_name)
+
+        self._lbl_emu_found = QLabel()
+        emu_row.addWidget(self._lbl_emu_found)
+        emu_row.addStretch()
+        game_lay.addLayout(emu_row)
+
+        emu_test_row = QHBoxLayout()
+        self._btn_test_emu = QPushButton("▶  Chạy thử: tắt giả lập rồi bật lại ngay")
+        self._btn_test_emu.setToolTip(
+            "Chạy đúng cái cơ chế gỡ treo, ngay bây giờ, không phải chờ\n"
+            "tới lúc giả lập treo thật. Đi qua đúng đường thật:\n"
+            "  ldconsole quit → chờ tắt → launch → chờ Android lên\n"
+            "  → chờ ADB nối lại → mở game → chờ vào tới làng.\n\n"
+            "Bot phải đang chạy thì mới bấm được. Không cần bật ô trên,\n"
+            "và chạy thử xong cũng không tự bật.\n\n"
+            "Mất khoảng 1–3 phút, và giả lập bị ĐÓNG THẬT.",
+        )
+        self._btn_test_emu.clicked.connect(self._on_test_emulator_restart)
+        emu_test_row.addWidget(self._btn_test_emu)
+
+        self._lbl_emu_status = QLabel("")
+        self._lbl_emu_status.setStyleSheet("color: #c0c0c0;")
+        emu_test_row.addWidget(self._lbl_emu_status, 1)
+        game_lay.addLayout(emu_test_row)
+
         root.addWidget(game_grp)
+
+        # ── Chu kỳ chơi — nghỉ ──────────────────────────────────────────
+        cyc_grp = QGroupBox("Chu kỳ chơi — nghỉ (tắt game rồi mở lại)")
+        cyc_lay = QVBoxLayout(cyc_grp)
+
+        self._chk_session_cycle = QCheckBox(
+            "Chơi một lúc rồi tắt hẳn game, nghỉ xong mở lại chạy tiếp",
+        )
+        self._chk_session_cycle.setToolTip(
+            "Chạy liền mấy tiếng không nghỉ là dấu vết dễ thấy nhất.\n"
+            "Bật cái này thì bot chơi một đoạn dài ngẫu nhiên, tắt hẳn\n"
+            "game (am force-stop, không phải bấm Home), nghỉ một đoạn\n"
+            "ngẫu nhiên rồi mở lại và chạy tiếp.\n"
+            "Không bao giờ tắt giữa trận — đến giờ mà đang đánh thì chờ\n"
+            "đánh xong về làng đã.",
+        )
+        self._chk_session_cycle.stateChanged.connect(self._on_value_changed)
+        cyc_lay.addWidget(self._chk_session_cycle)
+
+        play_row = QHBoxLayout()
+        play_row.addWidget(QLabel("Chơi (phút):"))
+        self._spin_play_min = QDoubleSpinBox()
+        self._spin_play_max = QDoubleSpinBox()
+        play_row.addWidget(self._spin_play_min)
+        play_row.addWidget(QLabel("→"))
+        play_row.addWidget(self._spin_play_max)
+
+        play_row.addSpacing(20)
+        play_row.addWidget(QLabel("Nghỉ (phút):"))
+        self._spin_break_min = QDoubleSpinBox()
+        self._spin_break_max = QDoubleSpinBox()
+        play_row.addWidget(self._spin_break_min)
+        play_row.addWidget(QLabel("→"))
+        play_row.addWidget(self._spin_break_max)
+        play_row.addStretch()
+
+        for spin, tip in (
+            (self._spin_play_min, "Đoạn chơi ngắn nhất."),
+            (self._spin_play_max, "Đoạn chơi dài nhất."),
+            (self._spin_break_min, "Nghỉ ngắn nhất."),
+            (self._spin_break_max, "Nghỉ dài nhất."),
+        ):
+            spin.setRange(0.1, 1440.0)
+            spin.setSingleStep(1.0)
+            spin.setDecimals(1)
+            spin.setToolTip(f"{tip}\nMỗi lần đều bốc ngẫu nhiên trong khoảng này.")
+            spin.valueChanged.connect(self._on_value_changed)
+        cyc_lay.addLayout(play_row)
+
+        test_row = QHBoxLayout()
+        self._btn_test_cycle = QPushButton("▶  Chạy thử (30 giây → tắt → 15 giây → mở lại)")
+        self._btn_test_cycle.setToolTip(
+            "Chạy đúng một chu kỳ ngắn để xem cơ chế có hoạt động không:\n"
+            "30 giây nữa bot tắt game, 15 giây sau mở lại và tự chạy tiếp.\n"
+            "Bot phải đang chạy thì mới bấm được — đây là kiểm tra thật,\n"
+            "không phải mô phỏng. Không cần bật ô ở trên, và chạy thử\n"
+            "xong cũng không tự bật.",
+        )
+        self._btn_test_cycle.clicked.connect(self._on_test_cycle)
+        test_row.addWidget(self._btn_test_cycle)
+
+        self._lbl_cycle_status = QLabel("")
+        self._lbl_cycle_status.setStyleSheet("color: #c0c0c0;")
+        test_row.addWidget(self._lbl_cycle_status, 1)
+        cyc_lay.addLayout(test_row)
+
+        root.addWidget(cyc_grp)
 
         # ── Console Settings ────────────────────────────────────────────
         con_grp = QGroupBox("Bảng log")
@@ -439,6 +573,16 @@ class SettingsTab(QWidget):
         self._edit_game_pkg.setText(str(s.get("game_package", "com.supercell.clashofclans")))
         self._spin_game_interval.setValue(int(s.get("game_check_interval", 60)))
         self._chk_auto_launch.setChecked(bool(s.get("auto_launch_game", True)))
+        self._chk_emu_restart.setChecked(bool(s.get("emulator_auto_restart", False)))
+        self._edit_emu_name.setText(str(s.get("emulator_name", "") or ""))
+        self._refresh_emulator_label()
+
+        # Chu kỳ chơi — nghỉ
+        self._chk_session_cycle.setChecked(bool(s.get("session_cycle_enabled", False)))
+        self._spin_play_min.setValue(float(s.get("session_play_min_min", 60.0)))
+        self._spin_play_max.setValue(float(s.get("session_play_max_min", 75.0)))
+        self._spin_break_min.setValue(float(s.get("session_break_min_min", 5.0)))
+        self._spin_break_max.setValue(float(s.get("session_break_max_min", 10.0)))
 
         # Console
         self._spin_max_lines.setValue(s.get("console_max_lines"))
@@ -469,6 +613,13 @@ class SettingsTab(QWidget):
         s.set("game_package", self._edit_game_pkg.text().strip() or "com.supercell.clashofclans")
         s.set("game_check_interval", self._spin_game_interval.value())
         s.set("auto_launch_game", self._chk_auto_launch.isChecked())
+        s.set("emulator_auto_restart", self._chk_emu_restart.isChecked())
+        s.set("emulator_name", self._edit_emu_name.text().strip())
+        s.set("session_cycle_enabled", self._chk_session_cycle.isChecked())
+        s.set("session_play_min_min", self._spin_play_min.value())
+        s.set("session_play_max_min", self._spin_play_max.value())
+        s.set("session_break_min_min", self._spin_break_min.value())
+        s.set("session_break_max_min", self._spin_break_max.value())
         s.set("console_max_lines", self._spin_max_lines.value())
         s.set("console_font_size", self._spin_font.value())
         s.set("console_show_debug", self._chk_debug.isChecked())
@@ -491,6 +642,65 @@ class SettingsTab(QWidget):
 
     def _on_value_changed(self, *_) -> None:
         self._save_values()
+
+    def _on_test_cycle(self, *_) -> None:
+        """Hẹn một chu kỳ 30 giây / 15 giây trên engine đang chạy.
+
+        Cố tình KHÔNG tự mở bot hộ: chạy thử là để xem bot đang chạy có
+        tắt rồi mở lại game và đánh tiếp được không, nên phải chạy trên
+        đúng cái engine thật.
+        """
+        engine = self._engine
+        if engine is None or not engine.isRunning():
+            self._lbl_cycle_status.setText(
+                "Hãy bấm Bắt đầu cho bot chạy trước rồi mới chạy thử được.",
+            )
+            return
+        engine.request_test_cycle(30.0, 15.0)
+        self._lbl_cycle_status.setText("Đã hẹn — 30 giây nữa game sẽ tắt.")
+
+    def _on_test_emulator_restart(self) -> None:
+        """Tắt/bật lại giả lập ngay, để xem cơ chế gỡ treo có chạy không.
+
+        Chạy trên engine đang chạy chứ không tự gọi ``emulator.restart()``
+        ở đây: hàm đó chờ máy ảo lên rồi chờ game vào làng, gọi thẳng từ
+        thread giao diện là treo cứng cửa sổ vài phút. Và chạy trên engine
+        thật mới kiểm tra được phần bot có tự đứng dậy đánh tiếp không —
+        đó mới là thứ đáng nghi.
+        """
+        engine = self._engine
+        if engine is None or not engine.isRunning():
+            self._lbl_emu_status.setText(
+                "Hãy bấm Bắt đầu cho bot chạy trước rồi mới chạy thử được.",
+            )
+            return
+
+        from core import emulator
+        if not emulator.is_available():
+            self._lbl_emu_status.setText(
+                "❌ Không tìm thấy ldconsole.exe — chưa chạy thử được.",
+            )
+            return
+
+        insts = emulator.list_instances()
+        name = str(self._settings.get("emulator_name", "") or "").strip()
+        target = name or f"index {int(self._settings.get('emulator_index', 0))}"
+        answer = QMessageBox.question(
+            self,
+            "Chạy thử tắt/bật giả lập",
+            f"Sẽ ĐÓNG THẬT giả lập '{target}' rồi bật lại ngay.\n\n"
+            f"Máy ảo đang thấy: {', '.join(i['name'] for i in insts) or '(không có)'}\n\n"
+            "Mọi thứ đang mở trong giả lập sẽ mất. Mất khoảng 1–3 phút.\n"
+            "Tiếp tục?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            self._lbl_emu_status.setText("Đã huỷ.")
+            return
+
+        engine.request_test_emulator_restart()
+        self._lbl_emu_status.setText("Đã hẹn — đang tắt giả lập…")
 
     def _probe_multi_touch(self, *_) -> None:
         """Say straight away whether the switch can actually do anything.
@@ -571,6 +781,30 @@ class SettingsTab(QWidget):
         p = PRESETS.get(key, {})
         self._preset_desc.setText(p.get("description", ""))
 
+    def _refresh_emulator_label(self) -> None:
+        """Nói thẳng có tìm thấy ldconsole.exe hay không.
+
+        Không có nó thì công tắc trên kia là công tắc giả — bật cũng
+        không làm gì, và người dùng chỉ biết điều đó khi giả lập treo
+        lần sau. Thà nói ngay lúc bật.
+        """
+        try:
+            from core import emulator
+            path = emulator.console_path()
+        except Exception:
+            path = None
+
+        if path:
+            self._lbl_emu_found.setText("✅ ldconsole")
+            self._lbl_emu_found.setToolTip(path)
+        else:
+            self._lbl_emu_found.setText("❌ không thấy ldconsole")
+            self._lbl_emu_found.setToolTip(
+                "Không tìm thấy ldconsole.exe ở các chỗ cài thường gặp.\n"
+                "Điền đường dẫn đầy đủ vào 'emulator_console_path' trong\n"
+                "profiles/settings.json thì tính năng mới chạy được.",
+            )
+
     def _all_widgets(self):
         """Every control _load_values touches.
 
@@ -598,5 +832,9 @@ class SettingsTab(QWidget):
             self._spin_building_thr, self._spin_ocr_interval,
             self._spin_hero_delay, self._spin_jitter,
             self._edit_game_pkg, self._spin_game_interval, self._chk_auto_launch,
+            self._chk_emu_restart, self._edit_emu_name,
+            self._chk_session_cycle,
+            self._spin_play_min, self._spin_play_max,
+            self._spin_break_min, self._spin_break_max,
             self._spin_max_lines, self._spin_font, self._chk_debug,
         ]

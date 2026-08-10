@@ -558,6 +558,11 @@ class ScreenReader:
             "attack_button2",
             "confirm_button",
             "end_battle_confirm", "reload_button",
+            # "Welcome back Chief" — the offline-attack report that greets a
+            # returning session. It covers the village but leaves the Attack
+            # button visible, so nothing else in detect_state reports it and
+            # the stuck timer never fires (that only watches UNKNOWN/LOADING).
+            "ok_button",
         ]
         found = []
         for name in names:

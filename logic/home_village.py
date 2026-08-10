@@ -519,21 +519,31 @@ class HomeVillageLogic:
             tap(cluster_x + random.randint(-15, 15), cluster_y + random.randint(-15, 15))
             time.sleep(0.3)
 
-        # ── STEP 3: HERO ABILITY WAIT (from Settings) ────────────────
-        _ability_delay = Settings().get("hero_ability_delay", 3.0)
-        log.info("Waiting %.1f seconds (configurable in Settings)...", _ability_delay)
-        _steps = int(_ability_delay / 0.5)
+        # ── STEP 3: HERO ABILITY WAIT ────────────────────────────────
+        # Roll trong dải đã cấu hình, nên không trận nào kích kỹ năng
+        # đúng cùng một nhịp. Đọc qua object V2 để đường cũ này và luật
+        # V2 dùng chung một cấu hình.
+        _ability_delay = self._v2.hero_ability_delay()
+        log.info("Waiting %.1f seconds for the army to engage...", _ability_delay)
+        _steps = max(1, int(_ability_delay / 0.5))
         for _ in range(_steps):
             if self._is_interrupted(): return
             time.sleep(0.5)
 
         # ── STEP 4: HERO ABILITIES (Memory Slot Double-Tap) ──────────────
-        for hero_name, hx, hy in self._hero_memory:
-            if self._is_interrupted(): return
-            tap(hx, hy)
-            time.sleep(0.1)
-            tap(hx, hy)
-            time.sleep(0.3)
+        if not self._v2.hero_ability_enabled():
+            if self._hero_memory:
+                log.info(
+                    "Hero abilities on auto — leaving the %d hero(es) to fire "
+                    "their own at low health.", len(self._hero_memory),
+                )
+        else:
+            for hero_name, hx, hy in self._hero_memory:
+                if self._is_interrupted(): return
+                tap(hx, hy)
+                time.sleep(0.1)
+                tap(hx, hy)
+                time.sleep(0.3)
 
         # ── STEP 5: SMART SPELL DISTRIBUTION (Ordered from UI) ───────
         spell_ss = adb_screencap()

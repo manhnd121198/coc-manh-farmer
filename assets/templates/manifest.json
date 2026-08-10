@@ -1,4 +1,13 @@
 {
+  "ok_button": {
+    "category": "ui_elements",
+    "label": "Ok Button",
+    "file": "assets\\templates\\ui_elements\\ok_button.png",
+    "width": 173,
+    "height": 72,
+    "screen_w": 1350,
+    "screen_h": 1080
+  },
   "normal_mode_btn": {
     "category": "ui_elements",
     "label": "Normal Mode Btn",
@@ -179,15 +188,19 @@
     "category": "heroes",
     "label": "Barbarian King",
     "file": "assets\\templates\\heroes\\barbarian_king.png",
-    "width": 166,
-    "height": 225
+    "width": 85,
+    "height": 113,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "grand_warden": {
     "category": "heroes",
     "label": "Grand Warden",
     "file": "assets\\templates\\heroes\\grand_warden.png",
-    "width": 166,
-    "height": 220
+    "width": 85,
+    "height": 113,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "dragon_duke": {
     "category": "heroes",
@@ -355,8 +368,10 @@
     "category": "troops",
     "label": "Baba",
     "file": "assets\\templates\\troops\\baba.png",
-    "width": 74,
-    "height": 103
+    "width": 93,
+    "height": 114,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "vake": {
     "category": "troops",
@@ -369,8 +384,10 @@
     "category": "troops",
     "label": "Valkyrie",
     "file": "assets\\templates\\troops\\valkyrie.png",
-    "width": 71,
-    "height": 105
+    "width": 85,
+    "height": 112,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "minion": {
     "category": "heroes",

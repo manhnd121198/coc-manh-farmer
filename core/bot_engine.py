@@ -22,8 +22,11 @@ from core.adb_handler import (
     is_app_installed,
     is_game_running,
     launch_app,
+    force_stop_app,
     get_focused_package,
 )
+from core import emulator
+from core.session_cycle import SessionCycle
 from core.state_machine import StateMachine, GameState
 from vision.screen_reader import ScreenReader
 from vision.ocr_reader import OCRReader
@@ -47,6 +50,31 @@ STUCK_TIMEOUT = 20
 POST_ATTACK_CONFIRM_WAIT = 4.0
 POST_ATTACK_CONFIRM_POLL = 0.5
 
+# Chỉ tắt game khi đang đứng ở làng. Tắt giữa trận là mất quân đã thả mà
+# vẫn mất phí tìm trận, nên đến hạn mà đang đánh dở thì chờ đánh xong.
+BREAK_SAFE_STATES = (GameState.HOME, GameState.BUILDER_BASE_HOME)
+# Không bao giờ tắt ở các màn này, dù đã quá hạn bao lâu.
+BREAK_NEVER_STATES = (
+    GameState.IN_BATTLE, GameState.BB_BATTLE, GameState.BB_BATTLE_STAGE2,
+)
+# Quá hạn lâu hơn ngần này mà vẫn chưa về được làng thì tắt luôn từ bất
+# kỳ màn nào không phải đang đánh. Kẹt ở UNKNOWN/LOADING là lý do hay
+# gặp nhất, mà tắt mở lại game chính là cách gỡ kẹt đó.
+BREAK_OVERDUE_GRACE = 300.0
+# Chờ game vào tới làng sau khi mở lại. CoC tải lâu, và hết thời gian
+# này cũng không sao — vòng lặp chính tự xử tiếp.
+GAME_READY_TIMEOUT = 180.0
+GAME_READY_POLL = 2.0
+
+# Thiết bị treo/bò: screencap trả None liên tục. Đây KHÔNG phải mất kết nối
+# — `adb devices` vẫn xanh vì nó hỏi ADB server trên PC chứ không hỏi máy —
+# nên phải đếm riêng, nếu không vòng lặp chính cứ nện lệnh vào một con máy
+# đang ngộp cho tới khi người dùng tự tay dừng.
+DEVICE_STALL_STRIKES = 5          # sau ngần này lần thì báo mất kết nối + lùi
+DEVICE_STALL_BACKOFF = 15.0       # nghỉ bao lâu mỗi vòng khi đã lùi
+DEVICE_STALL_RESTART = 8          # ngần này lần thì khởi động lại giả lập
+DEVICE_STALL_GIVE_UP = 40         # ngần này lần thì dừng hẳn (khi không bật tự khởi động lại)
+
 
 class BotEngine(QThread):
     """Central automation thread."""
@@ -59,6 +87,7 @@ class BotEngine(QThread):
     help_needed        = pyqtSignal(object, str)     # (screenshot, reason)
     game_not_installed = pyqtSignal(str)             # package name
     stats_changed      = pyqtSignal(int, int)        # (attacks, skips)
+    session_note       = pyqtSignal(str)             # chu kỳ chơi — nghỉ
 
     def __init__(self, profile: dict, mode: str = "home_village") -> None:
         super().__init__()
@@ -83,6 +112,15 @@ class BotEngine(QThread):
 
         # Game-presence periodic check (timestamps of the last verification).
         self._last_game_check: float = 0.0
+
+        # Chu kỳ chơi — nghỉ (tắt game một lúc rồi mở lại).
+        self._session = SessionCycle()
+        self._break_wait_logged = False
+
+        # Số lần screencap trả None liên tiếp — dấu hiệu giả lập treo.
+        self._stall_strikes: int = 0
+        # Nút "Chạy thử" bên tab Cài đặt bật cờ này; tick sau mới làm.
+        self._test_emulator_restart: bool = False
 
         # Session tally — reset on every start_bot(), not on pause/resume.
         self._attack_count = 0
@@ -140,10 +178,26 @@ class BotEngine(QThread):
             self.game_not_installed.emit(package)
             return False
 
-        if is_game_running(package):
+        # Ask ONCE. is_game_running() runs the same dumpsys internally, so
+        # calling both doubles the traffic — and dumpsys is one of the first
+        # things to stop answering when a device starts thrashing.
+        focused = get_focused_package()
+
+        if focused == package:
             return True
 
-        focused = get_focused_package() or "<unknown>"
+        if focused is None:
+            # The CHECK failed, which is not the same as "the game is gone".
+            # dumpsys returns None both when the window is unparseable and
+            # when the call timed out, and launching an app at a device that
+            # just failed to answer is the worst possible response: it was
+            # already struggling and now it gets two more intents to service.
+            log.warning(
+                "Cannot read the foreground app (dumpsys gave nothing) — "
+                "leaving the game alone instead of guessing it died.",
+            )
+            return False
+
         log.warning(
             "Game is not in the foreground (focused: %s). %s",
             focused,
@@ -187,6 +241,7 @@ class BotEngine(QThread):
 
         self._last_game_check = time.time()
         self.reset_stats()
+        self._session.start()
         log.info("Starting bot (mode=%s).", self._mode)
         self._running = True
         self.start()
@@ -196,6 +251,229 @@ class BotEngine(QThread):
         log.info("Bot engine STOP.")
         self._running = False
         self._paused = False
+        self._session.cancel()
+
+    # ── Chu kỳ chơi — nghỉ ──────────────────────────────────────────────
+
+    def request_test_cycle(self, play_sec: float = 30.0, break_sec: float = 15.0) -> None:
+        """Hẹn một chu kỳ ngắn để xem đóng/mở game có chạy không.
+
+        Nút test trên tab Cài đặt gọi hàm này. Chạy đúng một lần và
+        không cần bật tính năng — nó kiểm tra cơ chế, không phải bật
+        tính năng hộ người dùng.
+        """
+        self._session.arm_test(play_sec, break_sec)
+        self._break_wait_logged = False
+        self.session_note.emit(
+            f"Chạy thử: {play_sec:.0f}s nữa tắt game, {break_sec:.0f}s sau mở lại.",
+        )
+
+    def request_test_emulator_restart(self) -> None:
+        """Hẹn một lần tắt/bật giả lập để xem cơ chế gỡ treo có chạy không.
+
+        Chỉ đặt cờ; việc nặng để tick sau làm trên thread của engine. Gọi
+        thẳng ``_restart_emulator()`` từ nút bấm sẽ khoá cứng giao diện
+        vài phút, vì nó chờ máy ảo lên rồi chờ game vào tới làng.
+
+        Không cần bật ``emulator_auto_restart``: nút này kiểm tra cơ chế,
+        không phải bật tính năng hộ người dùng — giống nút chạy thử chu kỳ.
+        """
+        self._test_emulator_restart = True
+        self.session_note.emit("Chạy thử: sắp tắt giả lập rồi bật lại…")
+
+    def _may_break_now(self, detected: GameState) -> bool:
+        """Có được tắt game ở màn hình hiện tại không."""
+        if detected in BREAK_NEVER_STATES:
+            return False
+        if detected in BREAK_SAFE_STATES:
+            return True
+        # Không phải làng, cũng không phải đang đánh: màn tìm trận, màn
+        # kết quả, hoặc kẹt ở UNKNOWN. Chờ một lúc cho nó tự về làng đã,
+        # quá lâu thì tắt luôn.
+        return self._session.overdue_sec() >= BREAK_OVERDUE_GRACE
+
+    def _maybe_take_session_break(self, detected: GameState) -> bool:
+        """True nghĩa là vừa nghỉ xong — tick này bỏ qua, chụp lại từ đầu."""
+        if not self._session.due():
+            return False
+
+        if not self._may_break_now(detected):
+            if not self._break_wait_logged:
+                self._break_wait_logged = True
+                log.info(
+                    "Đến giờ nghỉ nhưng đang ở %s — chờ về làng rồi mới tắt game.",
+                    detected.name,
+                )
+            return False
+
+        self._break_wait_logged = False
+        self._take_session_break(detected)
+        return True
+
+    def _take_session_break(self, detected: GameState) -> None:
+        """Tắt game, ngồi chờ, mở lại, chờ vào tới làng."""
+        was_test = self._session.is_test
+        seconds = self._session.take_break()
+        package = str(Settings().get("game_package", "com.supercell.clashofclans"))
+
+        log.info(
+            "NGHỈ PHIÊN%s: tắt %s ở màn %s, %.1f phút nữa mở lại.",
+            " (chạy thử)" if was_test else "", package, detected.name, seconds / 60.0,
+        )
+        self.session_note.emit(f"Đang nghỉ — mở lại game sau {seconds / 60.0:.1f} phút.")
+        force_stop_app(package)
+        self._sm.reset()
+        self.state_changed.emit(GameState.UNKNOWN.name)
+
+        # Chờ có cắt được: bấm Dừng lúc đang nghỉ thì phải dừng ngay chứ
+        # không phải đợi hết mười phút.
+        end = time.time() + seconds
+        while self._running and time.time() < end:
+            time.sleep(0.5)
+        if not self._running:
+            log.info("Bot dừng trong lúc nghỉ — không mở lại game.")
+            return
+
+        log.info("Hết giờ nghỉ — mở lại %s.", package)
+        self.session_note.emit("Đang mở lại game…")
+        launch_app(package)
+        self._last_game_check = time.time()
+        ready = self._wait_for_game_ready()
+
+        # Đồng hồ kẹt phải reset: màn tải của CoC lâu hơn STUCK_TIMEOUT,
+        # không reset thì vừa vào game đã bị hỏi "bot có bị kẹt không".
+        self._state_enter_time = time.time()
+        self._help_already_requested = False
+
+        if was_test:
+            log.info(
+                "CHẠY THỬ chu kỳ: %s. Chu kỳ thật %s.",
+                "vào lại game OK" if ready else "mở lại rồi nhưng chưa thấy làng",
+                "vẫn chạy tiếp" if self._session.enabled() else "đang tắt nên dừng ở đây",
+            )
+            self.session_note.emit(
+                "Chạy thử xong — bot đã vào lại game."
+                if ready else
+                "Chạy thử: đã mở lại game nhưng chưa nhận ra màn làng.",
+            )
+        self._session.start()
+
+    def _wait_for_game_ready(self) -> bool:
+        """Chờ đến khi nhận ra màn làng. False = hết giờ chờ.
+
+        Hết giờ cũng không sao: vòng lặp chính vẫn chạy tiếp và tự xử
+        màn hình đang có. Chờ ở đây chỉ để không đâm thẳng vào logic
+        đánh trong lúc game còn đang tải.
+        """
+        deadline = time.time() + GAME_READY_TIMEOUT
+        while self._running and time.time() < deadline:
+            time.sleep(GAME_READY_POLL)
+            screenshot = screencap()
+            if screenshot is None:
+                continue
+            state = self._screen_reader.detect_state(screenshot)
+            if state in BREAK_SAFE_STATES:
+                log.info("Đã vào lại game, đang ở %s.", state.name)
+                return True
+        if self._running:
+            log.warning(
+                "Mở lại game nhưng %.0f giây vẫn chưa thấy màn làng — "
+                "để vòng lặp chính tự xử.", GAME_READY_TIMEOUT,
+            )
+        return False
+
+    def _handle_device_stall(self) -> None:
+        """screencap trả None — máy có thể đang treo.
+
+        Đường này trước đây chỉ ``return`` lặng lẽ, nên bộ đếm 10-lỗi ở
+        ``run()`` không bao giờ tăng (không có exception nào được ném) và
+        bot nện lệnh vào máy chết cho tới khi người dùng tự tay dừng. Đo
+        trên máy thật: 8 phút, ~50 lần screencap quá hạn.
+        """
+        self._stall_strikes += 1
+
+        if self._stall_strikes < DEVICE_STALL_STRIKES:
+            return
+
+        if self._stall_strikes == DEVICE_STALL_STRIKES:
+            log.error(
+                "Máy không trả lời %d lần liên tiếp. ADB vẫn báo 'device' vì "
+                "nó chỉ hỏi server trên PC — nhiều khả năng giả lập đang treo.",
+                self._stall_strikes,
+            )
+            self._sm.transition(GameState.DISCONNECTED)
+            self.state_changed.emit(GameState.DISCONNECTED.name)
+
+        if (
+            self._stall_strikes >= DEVICE_STALL_RESTART
+            and Settings().get("emulator_auto_restart", False)
+            and emulator.is_available()
+        ):
+            self._restart_emulator()
+            return
+
+        if self._stall_strikes >= DEVICE_STALL_GIVE_UP:
+            log.critical(
+                "Bỏ cuộc sau %d lần máy không trả lời — dừng bot. "
+                "Khởi động lại giả lập bằng tay rồi bấm Start.",
+                self._stall_strikes,
+            )
+            self.error_occurred.emit(
+                "Giả lập không trả lời. Bot đã dừng — hãy khởi động lại giả lập.",
+            )
+            self._running = False
+            return
+
+        # Lùi lại thay vì nện tiếp. Mỗi lần thử vẫn tốn nguyên timeout của
+        # screencap (10s), nên nghỉ thêm ở đây là để máy có cửa thở.
+        time.sleep(DEVICE_STALL_BACKOFF)
+
+    def _restart_emulator(self, stop_on_failure: bool = True) -> None:
+        """Tắt hẳn giả lập rồi bật lại, sau đó chờ game vào tới làng.
+
+        ``stop_on_failure`` False là đường của nút Chạy thử: hỏng thì báo
+        rồi thôi. Dừng bot lúc đó là trừng phạt người dùng vì đã đi kiểm
+        tra, mà giả lập lúc ấy vẫn đang chạy tốt.
+        """
+        log.warning("Đang khởi động lại giả lập…")
+        self.session_note.emit("Đang tắt giả lập rồi bật lại…")
+
+        if not emulator.restart():
+            log.error("Khởi động lại giả lập thất bại.")
+            self.session_note.emit("❌ Khởi động lại giả lập THẤT BẠI.")
+            self.error_occurred.emit(
+                "Không khởi động lại được giả lập."
+                + (" Bot đã dừng." if stop_on_failure else ""),
+            )
+            if stop_on_failure:
+                self._running = False
+            return
+
+        # Máy ảo lên không có nghĩa là ADB đã nối lại. Chờ tới khi chụp
+        # được một tấm hình thật thì mới coi là xong.
+        deadline = time.time() + GAME_READY_TIMEOUT
+        while self._running and time.time() < deadline:
+            if screencap() is not None:
+                break
+            time.sleep(GAME_READY_POLL)
+
+        self._stall_strikes = 0
+        self._sm.reset()
+        self._state_enter_time = time.time()
+        self._help_already_requested = False
+        self._last_game_check = 0.0
+
+        # Giả lập vừa bật lại thì game chưa chạy — mở rồi chờ vào làng.
+        self.session_note.emit("Giả lập đã lên, đang mở game…")
+        self._ensure_game_running(allow_launch=True)
+        ready = self._wait_for_game_ready()
+        if ready:
+            self.session_note.emit("✅ Đã tắt/bật lại giả lập và vào được làng.")
+            log.info("Đã gỡ treo xong, chạy tiếp.")
+        else:
+            self.session_note.emit(
+                "⚠ Giả lập đã lên nhưng chưa thấy màn làng — vòng lặp chính tự xử.",
+            )
 
     def pause(self) -> None:
         log.info("Bot engine PAUSED.")
@@ -267,12 +545,26 @@ class BotEngine(QThread):
         if self._executing_sequence:
             return
 
+        # Chạy thử gỡ treo — đi qua ĐÚNG đường thật, không mô phỏng.
+        if self._test_emulator_restart:
+            self._test_emulator_restart = False
+            self._restart_emulator()
+            return
+
         # ── Periodic game-presence check ──────────────────────────────
         # Runs at most once every Settings.game_check_interval seconds
         # so we don't spam dumpsys on every tick. If the user switched
         # to another app, try to bring CoC back to the foreground.
+        #
+        # Skipped entirely while the device is stalling: dumpsys is heavy
+        # and a device that cannot answer screencap will not answer this
+        # either, so all it does is add load to something already choking.
         interval = float(Settings().get("game_check_interval", 60))
-        if interval > 0 and (time.time() - self._last_game_check) >= interval:
+        if (
+            self._stall_strikes == 0
+            and interval > 0
+            and (time.time() - self._last_game_check) >= interval
+        ):
             self._last_game_check = time.time()
             self._ensure_game_running(allow_launch=True)
 
@@ -284,9 +576,17 @@ class BotEngine(QThread):
 
         screenshot = screencap()
         if screenshot is None:
+            self._handle_device_stall()
             return
+        self._stall_strikes = 0
 
         detected = self._screen_reader.detect_state(screenshot)
+
+        # Chu kỳ chơi — nghỉ. Hỏi trước khi xử màn hình: nếu vừa nghỉ
+        # xong thì ảnh chụp trên tay đã cũ mấy phút, tick sau chụp lại.
+        if self._maybe_take_session_break(detected):
+            return
+
         prev_state = self._sm.state
         if detected != prev_state:
             self._sm.transition(detected)
@@ -397,12 +697,16 @@ class BotEngine(QThread):
         )
 
         # Tiered priority — lower tier = tapped first.
+        #  Tier -1: blocking modals that sit OVER everything else. Whatever
+        #           else scores a match while one is up is showing through
+        #           the dimmed village behind it, so clear this first.
         #   Tier 0: pick the Mode tab the user chose (Normal / Ranked).
         #   Tier 1: press the FINAL confirm — attack_button2 or confirm_button
         #           (whichever appears, they are alternates with different text
         #           but the same role: start matchmaking).
         #   Tier 2: fallback popups (end-battle confirm, disconnect reload).
         priority = {
+            "ok_button":         -1,
             preferred_mode:       0,
             "attack_button2":     1,
             "confirm_button":     1,

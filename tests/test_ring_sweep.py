@@ -304,12 +304,12 @@ class RingSweepDropCountTest(unittest.TestCase):
 
     def test_the_rule_reads_hold_points_from_config(self):
         """The knob has to reach the planner, not just sit in the file."""
-        source = pathlib.Path("logic/rules/ring_sweep_rule.py").read_text()
+        source = pathlib.Path("logic/rules/ring_sweep_rule.py").read_text(encoding="utf-8")
         self.assertIn("wanted = self._hold_points(sweep_cfg, troop)", source)
         self.assertIn("pick_drops(centre, ring, wanted)", source)
 
     def test_the_shipped_config_defaults_to_four(self):
-        cfg = json.loads(pathlib.Path("config/v2_attack_rules.json").read_text())
+        cfg = json.loads(pathlib.Path("config/v2_attack_rules.json").read_text(encoding="utf-8"))
         sweep = cfg["ring_sweep"]
         self.assertEqual(4, sweep["hold_points"])
         self.assertEqual(4, sweep["hold_points_by_troop"]["_default"])
@@ -360,7 +360,7 @@ class RingSweepHoldPointsTest(unittest.TestCase):
 
     def test_the_shipped_troop_keys_all_exist_as_card_templates(self):
         """A key with no template is a line of config that does nothing."""
-        cfg = json.loads(pathlib.Path("config/v2_attack_rules.json").read_text())
+        cfg = json.loads(pathlib.Path("config/v2_attack_rules.json").read_text(encoding="utf-8"))
         manifest = json.loads(
             pathlib.Path("assets/templates/manifest.json").read_text(encoding="utf-8"),
         )

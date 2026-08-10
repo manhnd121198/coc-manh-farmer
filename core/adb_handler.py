@@ -415,6 +415,32 @@ def launch_app(package: str, timeout: int = 8) -> bool:
         return False
 
 
+def force_stop_app(package: str, timeout: int = 8) -> bool:
+    """Đóng hẳn ``package``, không phải đẩy xuống nền.
+
+    ``am force-stop`` giết process chứ không bấm Home, nên game thật sự
+    thoát — đúng cái mà chu kỳ nghỉ cần, vì để game chạy nền thì
+    Supercell vẫn thấy phiên đang mở.
+
+    Trả về True khi gói không còn là app đang hiện. Không xác minh được
+    (dumpsys hỏng) thì vẫn trả True: lệnh đã gửi đi rồi.
+    """
+    if not package:
+        return False
+    try:
+        _run(["shell", "am", "force-stop", package], timeout=timeout)
+    except Exception as exc:
+        log.warning("force-stop failed for %s: %s", package, exc)
+        return False
+    time.sleep(1.0)
+    focused = get_focused_package()
+    if focused == package:
+        log.warning("force-stop sent but %s is still focused.", package)
+        return False
+    log.info("Game closed: %s (đang hiện: %s)", package, focused or "?")
+    return True
+
+
 def is_game_running(package: str) -> bool:
     """Convenience wrapper: is the given package the current foreground app?"""
     focused = get_focused_package()

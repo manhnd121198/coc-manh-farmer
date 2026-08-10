@@ -154,6 +154,26 @@ _DEFAULTS: dict = {
     "game_package": "com.supercell.clashofclans",
     "game_check_interval": 60,
     "auto_launch_game": True,
+
+    # Giả lập treo thì tự tắt hẳn máy ảo rồi bật lại (LDPlayer, qua
+    # ldconsole.exe). Tắt mặc định: nó đóng máy ảo của người dùng, mất
+    # mọi thứ đang mở trong đó, nên phải là lựa chọn có ý thức.
+    # Để trống đường dẫn là tự dò các chỗ cài thường gặp.
+    # Có tên máy ảo thì dùng tên, không thì dùng index — thêm/xoá máy ảo
+    # làm index xô hết, mà nhầm index nghĩa là khởi động lại nhầm máy.
+    "emulator_auto_restart": False,
+    "emulator_console_path": "",
+    "emulator_name": "",
+    "emulator_index": 0,
+
+    # Chu kỳ chơi — nghỉ. Chơi một đoạn dài ngẫu nhiên rồi TẮT HẲN game,
+    # nghỉ một đoạn ngẫu nhiên nữa rồi mở lại chạy tiếp. Tính bằng phút.
+    # Tắt mặc định vì nó tự ý đóng game của người dùng.
+    "session_cycle_enabled": False,
+    "session_play_min_min": 60.0,
+    "session_play_max_min": 75.0,
+    "session_break_min_min": 5.0,
+    "session_break_max_min": 10.0,
 }
 
 
