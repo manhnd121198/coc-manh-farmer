@@ -1,15 +1,14 @@
-"""Ring Sweep — hold one spot on each side of the base to spread a card.
+"""Ring Sweep — hold points inside the deployable red-line corridor.
 
 Difference from ``PerimeterSweepRule``: that rule sweeps the four
 *screen-edge* corridors and refuses to run unless all four exist, which is
-rarely true. This rule builds its route from the red-zone polygon itself, so
-it hugs the base at a constant clearance and still works when only two sides
-have room.
+rarely true. This rule treats the detected polygon as the OUTER red line and
+follows the middle of the always-deployable grass band immediately inside it.
 
 Each attack picks ONE random point per side and holds it; the sides are
 visited in random order, so the same base attacked twice does not produce
 the same four spots in the same sequence. Every candidate point was already
-verified to sit outside the no-deploy zone.
+verified to sit between the outer and estimated inner red boundaries.
 
 All four sides at once, or one at a time
 ----------------------------------------
@@ -118,6 +117,11 @@ class RingSweepRule(AirAttackRule):
         is worth root.
         """
         cfg = ctx.config
+        touch_cfg = dict(cfg)
+        touch_cfg["tap_jitter_px"] = min(
+            int(cfg.get("tap_jitter_px", 12)),
+            max(0, int(sweep_cfg.get("tap_jitter_px", 3))),
+        )
         # Say which gesture is about to run, every time. The two paths look
         # identical from outside — the attack happens either way — so
         # without this the only way to tell whether the multi-finger switch
@@ -125,7 +129,7 @@ class RingSweepRule(AirAttackRule):
         if multi_touch.enabled():
             if multi_touch.available(cfg):
                 held = multi_touch.hold_all(
-                    drops, self._hold_window_ms(sweep_cfg, troop), cfg,
+                    drops, self._hold_window_ms(sweep_cfg, troop), touch_cfg,
                 )
                 if held:
                     return
@@ -150,7 +154,9 @@ class RingSweepRule(AirAttackRule):
             # Each side gets its own randomized window, so the four
             # presses of one attack are not identical either.
             hold_ms = self._hold_window_ms(sweep_cfg, troop)
-            ctx.skills.touch.long_press(x, y, hold_ms, cfg, min_ms=300)
+            ctx.skills.touch.long_press(
+                x, y, hold_ms, touch_cfg, min_ms=300,
+            )
 
     def execute(self, ctx: AttackContext) -> bool:
         cfg = ctx.config
@@ -158,7 +164,40 @@ class RingSweepRule(AirAttackRule):
         sweep_cfg = cfg.get("ring_sweep", {})
 
         screen_w = ctx.screenshot.shape[1]
-        ring = skills.ring.plan(ctx.polygon, screen_w, ctx.ui_cutoff, cfg)
+
+        # Prefer a corridor built straight from the YOLO base hull: offset
+        # the base edges outward by a fixed margin and drop on that ring.
+        # This does not depend on catching the red line with HSV, so it
+        # rescues bases where the colour mask clips the base. Falls back to
+        # the HSV outer-line corridor when the model finds no base.
+        base_poly = None
+        if bool(sweep_cfg.get("use_yolo_corridor", False)):
+            base_poly = skills.red_zone.yolo_base_polygon()
+            if base_poly is None:
+                base_poly = skills.red_zone.detect_yolo_base(
+                    ctx.screenshot, ctx.ui_cutoff, cfg,
+                )
+
+        if base_poly is not None:
+            ring = skills.ring.plan_from_base(
+                base_poly, screen_w, ctx.ui_cutoff, cfg,
+            )
+            dump_outer = skills.ring.corridor_polygon
+            dump_inner = base_poly
+            centre = (
+                skills.red_zone.centroid(base_poly)
+                or ctx.base_centroid
+                or (screen_w // 2, ctx.ui_cutoff // 2)
+            )
+            log.info(
+                "RingSweep: corridor from YOLO base (offset %dpx from base edges).",
+                int(sweep_cfg.get("yolo_deploy_offset_px", 15)),
+            )
+        else:
+            ring = skills.ring.plan(ctx.polygon, screen_w, ctx.ui_cutoff, cfg)
+            dump_outer = ctx.polygon
+            dump_inner = skills.ring.inner_polygon
+            centre = ctx.base_centroid or (screen_w // 2, ctx.ui_cutoff // 2)
 
         min_points = max(2, int(sweep_cfg.get("min_valid_points", 6)))
         if len(ring) < min_points:
@@ -168,7 +207,6 @@ class RingSweepRule(AirAttackRule):
             )
             return False
 
-        centre = ctx.base_centroid or (screen_w // 2, ctx.ui_cutoff // 2)
         covered = skills.ring.sides_covered(centre, ring)
         log.info(
             "RingSweep: %d point(s) around base, sides covered: %s",
@@ -191,6 +229,15 @@ class RingSweepRule(AirAttackRule):
             drops = skills.ring.pick_drops(centre, ring, wanted)
             if not drops:
                 continue
+            skills.red_zone.dump_ring_plan(
+                ctx.screenshot,
+                dump_outer,
+                dump_inner,
+                ring,
+                drops,
+                cfg,
+                troop,
+            )
             hero_drop = drops[0]
 
             log.info(

@@ -1,8 +1,8 @@
 """Tests for the Ring Sweep mode — even drops around all 4 sides of a base.
 
 The contract that matters in-game:
-  * every planned point must sit OUTSIDE the red zone (troops can always be
-    dropped there),
+  * every planned point must sit in the grass corridor between the outer
+    and inner red lines,
   * points must stay inside the playfield (off-screen taps are discarded by
     Android and silently lose troops),
   * coverage must be balanced across the four sides,
@@ -25,7 +25,8 @@ except ImportError:  # pragma: no cover
 
 CFG = {
     "ring_sweep": {
-        "clearance_px": 45,
+        "corridor_width_px": 40,
+        "boundary_margin_px": 5,
         "points_per_side": 4,
         "edge_margin_px": 60,
         "min_valid_points": 6,
@@ -55,6 +56,14 @@ def _diamond():
     )
 
 
+def _sharp_diamond():
+    """Convex outline shaped like the live dump that exposed corner spikes."""
+    return np.array(
+        [[620, 150], [780, 150], [1315, 530], [785, 950],
+         [615, 950], [65, 525]], dtype=np.int32,
+    )
+
+
 def _cross():
     return np.array(
         [[600, 200], [900, 200], [900, 350], [1200, 350], [1200, 600],
@@ -74,15 +83,16 @@ class RingSweepPlannerTest(unittest.TestCase):
     def _ring(self, polygon, screen_w=SCREEN_W):
         return self.plan.plan(polygon, screen_w, UI_CUTOFF, CFG)
 
-    # ── Chords must not cut through the no-deploy area ─────────────
-    def _crossings(self, polygon, a, b, samples=40):
+    def _blocked_samples(self, polygon, a, b, samples=40):
+        inner = self.plan.inner_polygon
         return sum(
-            self.rz.is_inside(
-                polygon,
+            (not self.rz.is_inside(polygon, x, y))
+            or self.rz.is_inside(inner, x, y)
+            for k in range(1, samples)
+            for x, y in [(
                 int(round(a[0] + (b[0] - a[0]) * k / samples)),
                 int(round(a[1] + (b[1] - a[1]) * k / samples)),
-            )
-            for k in range(1, samples)
+            )]
         )
 
     def test_deployable_arcs_never_run_through_the_base(self):
@@ -100,32 +110,34 @@ class RingSweepPlannerTest(unittest.TestCase):
                 self.assertGreaterEqual(len(arc), 2, "an arc needs a path")
                 for start, end in zip(arc, arc[1:]):
                     self.assertEqual(
-                        0, self._crossings(polygon, start, end),
-                        f"leg {start}->{end} crosses the no-deploy zone",
+                        0, self._blocked_samples(polygon, start, end),
+                        f"leg {start}->{end} leaves the deploy corridor",
                     )
 
-    def test_diamond_route_keeps_the_whole_lap_in_one_press(self):
-        """Straight isometric edges never cut the corners of a diamond base.
-
-        The earlier ray-cast route broke into four arcs on any rectangular
-        base because each corner chord clipped it. Every press costs a ~1s
-        ramp before the game deploys, so the lap must stay in one piece.
-        """
+    def test_corridor_route_keeps_usable_arcs(self):
+        """Skipping a corner may split the lap, but must not erase it."""
         polygon = _square()
         ring = self._ring(polygon)
         arcs = self.plan.deployable_arcs(polygon, ring)
-        self.assertEqual(1, len(arcs), f"lap split into {len(arcs)} arcs")
-        self.assertEqual(len(ring) + 1, len(arcs[0]), "lap must close on itself")
+        self.assertTrue(arcs)
+        self.assertTrue(all(len(arc) >= 2 for arc in arcs))
 
-    def test_no_point_lands_inside_the_red_zone(self):
+    def test_every_point_lands_between_the_two_red_lines(self):
         for polygon in (_square(), _cross()):
             ring = self._ring(polygon)
             self.assertTrue(ring, "planner produced no points")
+            inner = self.plan.inner_polygon
             for x, y in ring:
-                self.assertFalse(
-                    self.rz.is_inside(polygon, x, y),
-                    f"point ({x},{y}) is inside the no-deploy zone",
-                )
+                self.assertTrue(self.rz.is_inside(polygon, x, y))
+                self.assertFalse(self.rz.is_inside(inner, x, y))
+
+    def test_inset_does_not_cross_itself_at_sharp_corners(self):
+        self.plan.plan(_sharp_diamond(), 1350, 983, CFG)
+        inner = self.plan.inner_polygon.reshape((-1, 1, 2))
+        self.assertTrue(
+            cv2.isContourConvex(inner),
+            f"inner corridor boundary crossed itself: {inner.tolist()}",
+        )
 
     def test_points_stay_inside_the_playfield(self):
         for polygon in (_square(), _cross()):
@@ -186,7 +198,8 @@ class RingSweepPlannerTest(unittest.TestCase):
         self.assertGreaterEqual(len(ring), CFG["ring_sweep"]["min_valid_points"])
         for x, y in ring:
             self.assertLessEqual(x, 1350 - EDGE)
-            self.assertFalse(self.rz.is_inside(polygon, x, y))
+            self.assertTrue(self.rz.is_inside(polygon, x, y))
+            self.assertFalse(self.rz.is_inside(self.plan.inner_polygon, x, y))
 
     def test_missing_polygon_is_handled(self):
         self.assertEqual([], self.plan.plan(None, SCREEN_W, UI_CUTOFF, CFG))
@@ -418,6 +431,8 @@ class RingSweepHoldRoutingTest(unittest.TestCase):
         )
         rule = ring_sweep_rule.RingSweepRule()
         with mock.patch.object(rule, "_interrupted", return_value=False), \
+             mock.patch.object(ring_sweep_rule.multi_touch, "enabled",
+                               return_value=True), \
              mock.patch.object(ring_sweep_rule.multi_touch, "available",
                                return_value=available), \
              mock.patch.object(ring_sweep_rule.multi_touch, "hold_all",

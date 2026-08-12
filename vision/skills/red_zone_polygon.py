@@ -26,6 +26,11 @@ Pipeline (HSV pass):
        convex hull. This recovers fragmented detections without
        loosening the per-contour gates.
 
+Optional YOLO completeness guard: a small CoC-specific segmentation model
+finds the BaseArea before the colour passes. It does NOT replace the red-line
+polygon. It rejects an HSV/inversion candidate when that polygon clips a
+significant part of the detected base, then lets contour fusion/fallback try.
+
 Fallback (inversion pass): if the HSV pass returns nothing valid, the
 detector inverts the image and re-runs the same pipeline against
 CYAN (which is what the perimeter dashes turn into after a bitwise NOT).
@@ -62,6 +67,9 @@ log = BotLogger.get("v2.red_zone_polygon")
 
 class RedZonePolygonSkill:
     name = "red_zone_polygon"
+    _yolo_model = None
+    _yolo_model_path = ""
+    _yolo_failed_paths: set[str] = set()
 
     def detect(
         self,
@@ -76,18 +84,58 @@ class RedZonePolygonSkill:
         h, w = screenshot.shape[:2]
         ui_cutoff = max(1, min(ui_cutoff, h))
 
-        verts = self._run_pass(screenshot, ui_cutoff, cfg, mode="hsv")
+        guard = None
+        if bool(cfg.get("yolo_guard_enabled", False)):
+            guard = self._detect_yolo_guard(screenshot, ui_cutoff, cfg)
+        # Keep the YOLO base hull for this frame so a rule (Ring Sweep) can
+        # build a deploy corridor straight from it without a second inference.
+        self._last_yolo_base = guard
+
+        verts = self._run_pass(
+            screenshot, ui_cutoff, cfg, mode="hsv", guard=guard,
+        )
         if verts is not None:
             return verts
 
         if bool(cfg.get("use_inversion_fallback", True)):
             log.info("RedZone HSV pass failed sanity — retrying with colour-inversion fallback.")
-            verts = self._run_pass(screenshot, ui_cutoff, cfg, mode="inversion")
+            verts = self._run_pass(
+                screenshot, ui_cutoff, cfg, mode="inversion", guard=guard,
+            )
             if verts is not None:
                 return verts
 
         log.warning("RedZone polygon: detection FAILED on both HSV and inversion passes.")
         return None
+
+    def yolo_base_polygon(self) -> Optional[np.ndarray]:
+        """The YOLO base hull cached by the last ``detect`` call, or None.
+
+        Ring Sweep reuses this so enabling the YOLO corridor costs no extra
+        inference: ``detect`` already ran the model as its completeness guard
+        on the very same screenshot.
+        """
+        return getattr(self, "_last_yolo_base", None)
+
+    def detect_yolo_base(
+        self,
+        screenshot: np.ndarray,
+        ui_cutoff: int,
+        config: dict | None = None,
+    ) -> Optional[np.ndarray]:
+        """Run the YOLO segmentation on demand and return the base hull.
+
+        Used when the guard was disabled (so ``detect`` never cached one)
+        but a rule still wants the YOLO base to build a deploy corridor.
+        """
+        if screenshot is None:
+            return None
+        cfg = (config or {}).get("polygon", {}) if config else {}
+        h = screenshot.shape[0]
+        ui_cutoff = max(1, min(ui_cutoff, h))
+        base = self._detect_yolo_guard(screenshot, ui_cutoff, cfg)
+        self._last_yolo_base = base
+        return base
 
     # ── Internals ─────────────────────────────────────────────────
     def _run_pass(
@@ -96,6 +144,7 @@ class RedZonePolygonSkill:
         ui_cutoff: int,
         cfg: dict,
         mode: str,
+        guard: np.ndarray | None = None,
     ) -> Optional[np.ndarray]:
         h, w = screenshot.shape[:2]
         roi = screenshot[:ui_cutoff, :]
@@ -148,8 +197,13 @@ class RedZonePolygonSkill:
         if verts is not None:
             best_area = float(cv2.contourArea(best))
             if min_area <= best_area <= max_area and \
-                    self._sanity_ok(verts, w, ui_cutoff, cfg, mode):
+                    self._sanity_ok(verts, w, ui_cutoff, cfg, mode) and \
+                    self._candidate_covers_guard(verts, guard, w, cfg):
                 self._log_polygon(mode, verts, best_area, "single")
+                self._maybe_dump(
+                    screenshot, mask, contours, mode, cfg,
+                    verts=verts, source="single",
+                )
                 return verts
             elif best_area < min_area:
                 log.debug("RedZone (%s) single: area %.0f < min %.0f.",
@@ -157,6 +211,11 @@ class RedZonePolygonSkill:
             elif best_area > max_area:
                 log.debug("RedZone (%s) single: area %.0f > max %.0f (UI?).",
                           mode, best_area, max_area)
+            elif guard is not None:
+                log.info(
+                    "RedZone (%s) single rejected: polygon does not cover "
+                    "the YOLO base guard.", mode,
+                )
 
         # ── Attempt 2: fuse the top-K contours into one hull ─────
         # Real perimeters are often broken into 2-4 pieces when the
@@ -174,9 +233,14 @@ class RedZonePolygonSkill:
             if verts2 is not None:
                 fused_area = float(cv2.contourArea(cv2.convexHull(stacked)))
                 if min_area <= fused_area <= max_area and \
-                        self._sanity_ok(verts2, w, ui_cutoff, cfg, mode):
+                        self._sanity_ok(verts2, w, ui_cutoff, cfg, mode) and \
+                        self._candidate_covers_guard(verts2, guard, w, cfg):
                     self._log_polygon(mode, verts2, fused_area,
                                       f"fused-{len(ranked)}")
+                    self._maybe_dump(
+                        screenshot, mask, contours, mode, cfg,
+                        verts=verts2, source=f"fused-{len(ranked)}",
+                    )
                     return verts2
                 else:
                     log.debug(
@@ -188,6 +252,186 @@ class RedZonePolygonSkill:
         # user can see what we caught.
         self._maybe_dump(screenshot, mask, contours, mode, cfg)
         return None
+
+    @classmethod
+    def _detect_yolo_guard(
+        cls,
+        screenshot: np.ndarray,
+        ui_cutoff: int,
+        cfg: dict,
+    ) -> Optional[np.ndarray]:
+        """Return the model's BaseArea hull, only to reject clipped redlines."""
+        model_path = str(
+            cfg.get("yolo_guard_model", "assets/models/coc_deployable_seg.pt")
+        )
+        if not os.path.isabs(model_path):
+            project_root = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", ".."),
+            )
+            model_path = os.path.join(project_root, model_path)
+        model_path = os.path.abspath(model_path)
+
+        if model_path in cls._yolo_failed_paths:
+            return None
+        if not os.path.isfile(model_path):
+            log.warning("RedZone YOLO guard model not found: %s", model_path)
+            cls._yolo_failed_paths.add(model_path)
+            return None
+
+        try:
+            if cls._yolo_model is None or cls._yolo_model_path != model_path:
+                from ultralytics import YOLO
+                cls._yolo_model = YOLO(model_path)
+                cls._yolo_model_path = model_path
+                log.info("RedZone YOLO guard loaded: %s", model_path)
+
+            confidence = float(cfg.get("yolo_guard_confidence", 0.25))
+            image_size = max(320, int(cfg.get("yolo_guard_imgsz", 480)))
+            result = cls._yolo_model.predict(
+                screenshot,
+                conf=confidence,
+                imgsz=image_size,
+                device="cpu",
+                max_det=5,
+                retina_masks=True,
+                verbose=False,
+            )[0]
+            if result.boxes is None or result.masks is None:
+                log.info("RedZone YOLO guard: no BaseArea mask detected.")
+                return None
+
+            names = result.names or {}
+            choices = [
+                index for index, class_id in enumerate(result.boxes.cls)
+                if str(names.get(int(class_id), "")).lower() == "basearea"
+            ]
+            if not choices:
+                log.info("RedZone YOLO guard: prediction has no BaseArea class.")
+                return None
+            best = max(choices, key=lambda i: float(result.boxes.conf[i]))
+            score = float(result.boxes.conf[best])
+
+            h, w = screenshot.shape[:2]
+            mask = np.zeros((h, w), dtype=np.uint8)
+            xy = np.rint(result.masks.xy[best]).astype(np.int32)
+            if len(xy) < 3:
+                return None
+            cv2.fillPoly(mask, [xy], 255)
+            mask[ui_cutoff:, :] = 0
+
+            kernel_px = max(
+                3,
+                int(round(float(cfg.get("yolo_guard_open_kernel_px", 19))
+                          * w / 1350.0)),
+            )
+            if kernel_px % 2 == 0:
+                kernel_px += 1
+            kernel = cv2.getStructuringElement(
+                cv2.MORPH_ELLIPSE, (kernel_px, kernel_px),
+            )
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+            count, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
+            if count <= 1:
+                return None
+            component = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+            mask = np.where(labels == component, 255, 0).astype(np.uint8)
+            contours, _ = cv2.findContours(
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
+            )
+            if not contours:
+                return None
+            hull = cv2.convexHull(max(contours, key=cv2.contourArea))
+            eps = max(
+                1.0,
+                float(cfg.get("approx_eps_px", 2.0)) * w / 1350.0,
+            )
+            guard = cv2.approxPolyDP(hull, eps, True).reshape(-1, 2)
+
+            guard_area = float(cv2.contourArea(guard))
+            playfield_area = float(w * ui_cutoff)
+            if (len(guard) < 4 or guard_area < playfield_area * 0.04
+                    or guard_area > playfield_area * 0.75):
+                log.info(
+                    "RedZone YOLO guard rejected by size: verts=%d area=%.0f",
+                    len(guard), guard_area,
+                )
+                return None
+
+            cls._dump_yolo_guard(screenshot, mask, guard, cfg, score)
+            log.info(
+                "RedZone YOLO guard: confidence=%.3f verts=%d area=%.0f",
+                score, len(guard), guard_area,
+            )
+            return guard.astype(np.int32)
+        except Exception as exc:
+            log.warning("RedZone YOLO guard disabled after error: %s", exc)
+            cls._yolo_failed_paths.add(model_path)
+            cls._yolo_model = None
+            cls._yolo_model_path = ""
+            return None
+
+    @staticmethod
+    def _candidate_covers_guard(
+        candidate: np.ndarray,
+        guard: np.ndarray | None,
+        screen_w: int,
+        cfg: dict,
+    ) -> bool:
+        if guard is None or len(guard) < 3:
+            return True
+        tolerance = max(
+            0.0,
+            float(cfg.get("yolo_guard_tolerance_px", 8)) * screen_w / 1350.0,
+        )
+        covered = sum(
+            cv2.pointPolygonTest(
+                candidate, (float(point[0]), float(point[1])), True,
+            ) >= -tolerance
+            for point in guard.reshape(-1, 2)
+        )
+        ratio = covered / float(len(guard))
+        required = min(
+            1.0,
+            max(0.5, float(cfg.get("yolo_guard_min_coverage", 0.85))),
+        )
+        if ratio < required:
+            log.info(
+                "RedZone candidate covers only %.0f%% of YOLO guard (need %.0f%%).",
+                ratio * 100.0, required * 100.0,
+            )
+            return False
+        return True
+
+    @staticmethod
+    def _dump_yolo_guard(
+        screenshot: np.ndarray,
+        mask: np.ndarray,
+        guard: np.ndarray,
+        cfg: dict,
+        score: float,
+    ) -> None:
+        out_dir = cfg.get("debug_dump") or ""
+        if not out_dir:
+            return
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            overlay = screenshot.copy()
+            tint = np.zeros_like(overlay)
+            tint[:, :, 0] = mask
+            tint[:, :, 2] = mask
+            overlay = cv2.addWeighted(overlay, 0.75, tint, 0.35, 0)
+            cv2.polylines(
+                overlay, [guard.reshape(-1, 1, 2)], True, (0, 255, 255), 3,
+            )
+            ts = int(time.time() * 1000)
+            path = os.path.join(
+                out_dir, f"yolo_guard_success_{score:.3f}_{ts}.png",
+            )
+            cv2.imwrite(path, overlay)
+            log.info("RedZone YOLO guard debug dump → %s", path)
+        except Exception as exc:
+            log.debug("RedZone YOLO guard dump failed: %s", exc)
 
     @staticmethod
     def _verts_from_contour(
@@ -320,11 +564,10 @@ class RedZonePolygonSkill:
         contours: List[np.ndarray],
         mode: str,
         cfg: dict,
+        verts: np.ndarray | None = None,
+        source: str = "failed",
     ) -> None:
-        """When sanity fails, optionally drop a side-by-side debug
-        image so the user can SEE what the detector caught vs. the raw
-        screenshot. Enabled via ``polygon.debug_dump = "<dir>"`` in
-        ``v2_attack_rules.json``."""
+        """Save an overlay showing the mask, contours and chosen polygon."""
         out_dir = cfg.get("debug_dump") or ""
         if not out_dir:
             return
@@ -345,12 +588,111 @@ class RedZonePolygonSkill:
                 top = max(contours, key=cv2.contourArea)
                 cv2.drawContours(overlay, [cv2.convexHull(top)], -1,
                                  (0, 255, 0), 3)
+            if verts is not None:
+                polygon = verts.reshape((-1, 1, 2))
+                cv2.polylines(overlay, [polygon], True, (0, 255, 255), 4)
+                center = RedZonePolygonSkill.centroid(verts)
+                if center is not None:
+                    cv2.circle(overlay, center, 10, (255, 0, 255), -1)
             ts = int(time.time() * 1000)
-            path = os.path.join(out_dir, f"redzone_{mode}_{ts}.png")
+            status = "success" if verts is not None else "failed"
+            path = os.path.join(
+                out_dir, f"redzone_{status}_{mode}_{source}_{ts}.png",
+            )
             cv2.imwrite(path, overlay)
             log.info("RedZone debug dump → %s", path)
         except Exception as exc:
             log.debug("RedZone debug dump failed: %s", exc)
+
+    @staticmethod
+    def dump_ring_plan(
+        screenshot: np.ndarray,
+        outer_polygon: np.ndarray,
+        inner_polygon: np.ndarray | None,
+        ring: list[tuple[int, int]],
+        drops: list[tuple[int, int]],
+        config: dict,
+        troop: str,
+    ) -> None:
+        """Save the corridor and exact Ring Sweep points for review."""
+        out_dir = ((config or {}).get("polygon", {}) or {}).get("debug_dump") or ""
+        if not out_dir or screenshot is None or inner_polygon is None:
+            return
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            overlay = screenshot.copy()
+            outer = outer_polygon.reshape((-1, 1, 2)).astype(np.int32)
+            inner = inner_polygon.reshape((-1, 1, 2)).astype(np.int32)
+            corridor = np.zeros_like(overlay)
+            cv2.fillPoly(corridor, [outer], (0, 180, 0))
+            cv2.fillPoly(corridor, [inner], (0, 0, 0))
+            overlay = cv2.addWeighted(overlay, 0.78, corridor, 0.35, 0)
+            cv2.polylines(overlay, [outer], True, (0, 255, 255), 3)
+            cv2.polylines(overlay, [inner], True, (255, 255, 0), 3)
+            if ring:
+                for point in ring:
+                    cv2.circle(overlay, point, 4, (255, 0, 0), -1)
+            for point in drops:
+                cv2.circle(overlay, point, 10, (0, 255, 0), -1)
+            safe_troop = "".join(
+                c for c in str(troop) if c.isalnum() or c in "-_"
+            )
+            ts = int(time.time() * 1000)
+            path = os.path.join(out_dir, f"ringsweep_{safe_troop}_{ts}.png")
+            cv2.imwrite(path, overlay)
+            log.info("Ring Sweep debug dump → %s", path)
+        except Exception as exc:
+            log.debug("Ring Sweep debug dump failed: %s", exc)
+
+    @staticmethod
+    def dump_spell_plan(
+        screenshot: np.ndarray,
+        base_polygon: np.ndarray | None,
+        drops: list[tuple[int, int]],
+        drops_per_wave: int,
+        config: dict,
+        spell: str,
+    ) -> None:
+        """Save the planned spell carpet: every drop, coloured by wave.
+
+        Mirrors ``dump_ring_plan`` for troops. The number drawn on each dot
+        is the wave it belongs to, so you can confirm the 5-per-wave spread
+        matches the preview on a real capture.
+        """
+        out_dir = ((config or {}).get("polygon", {}) or {}).get("debug_dump") or ""
+        if not out_dir or screenshot is None or not drops:
+            return
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            overlay = screenshot.copy()
+            if base_polygon is not None and len(base_polygon) >= 3:
+                base = base_polygon.reshape((-1, 1, 2)).astype(np.int32)
+                shade = np.zeros_like(overlay)
+                cv2.fillPoly(shade, [base], (0, 120, 0))
+                overlay = cv2.addWeighted(overlay, 0.8, shade, 0.25, 0)
+                cv2.polylines(overlay, [base], True, (255, 255, 0), 2)
+            # One colour per wave, cycling if there are more than six.
+            wave_colours = [
+                (60, 60, 255), (0, 180, 255), (0, 255, 255),
+                (0, 255, 60), (255, 180, 0), (255, 60, 180),
+            ]
+            per_wave = max(1, int(drops_per_wave))
+            for index, point in enumerate(drops):
+                wave = index // per_wave
+                colour = wave_colours[wave % len(wave_colours)]
+                cv2.circle(overlay, (int(point[0]), int(point[1])), 9, colour, -1)
+                cv2.putText(
+                    overlay, str(wave + 1),
+                    (int(point[0]) - 5, int(point[1]) + 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1, cv2.LINE_AA,
+                )
+            safe = "".join(c for c in str(spell) if c.isalnum() or c in "-_")
+            ts = int(time.time() * 1000)
+            path = os.path.join(out_dir, f"spellcarpet_{safe}_{ts}.png")
+            cv2.imwrite(path, overlay)
+            log.info("Spell carpet debug dump → %s", path)
+        except Exception as exc:
+            log.debug("Spell carpet dump failed: %s", exc)
 
     @staticmethod
     def is_inside(polygon: np.ndarray, x: int, y: int, margin: int = 0) -> bool:

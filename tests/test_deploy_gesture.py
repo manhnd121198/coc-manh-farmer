@@ -104,7 +104,8 @@ class SweepRulesUseDeployLineTest(unittest.TestCase):
         fall back to the drag primitive."""
         source = pathlib.Path("logic/rules/ring_sweep_rule.py").read_text(encoding="utf-8")
         self.assertNotIn("deploy_path", source)
-        self.assertIn("skills.touch.long_press(x, y, hold_ms, cfg", source)
+        self.assertIn("ctx.skills.touch.long_press(", source)
+        self.assertIn("x, y, hold_ms, touch_cfg", source)
 
 
 if __name__ == "__main__":

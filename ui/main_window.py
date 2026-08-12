@@ -9,14 +9,15 @@ V7 Changes:
 
 import json
 import os
+import sys
 
 from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QDockWidget, QToolBar,
     QAction, QLabel, QWidget, QVBoxLayout, QFileDialog,
-    QMessageBox, QSizePolicy,
+    QMessageBox, QSizePolicy, QApplication,
 )
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QProcess
 
 from core.logger import BotLogger
 from core.bot_engine import BotEngine
@@ -77,6 +78,13 @@ class MainWindow(QMainWindow):
         save_act = QAction("💾 Save Profile", self)
         save_act.triggered.connect(self._save_profile_dialog)
         toolbar.addAction(save_act)
+
+        restart_act = QAction("🔄 Khởi động lại", self)
+        restart_act.setToolTip(
+            "Đóng và mở lại ứng dụng để nạp thay đổi code/cấu hình."
+        )
+        restart_act.triggered.connect(self._restart_app)
+        toolbar.addAction(restart_act)
         toolbar.addSeparator()
 
         spacer = QWidget()
@@ -537,6 +545,51 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Loaded", f"Profile loaded from:\n{path}")
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Load failed:\n{exc}")
+
+    def _restart_app(self) -> None:
+        """Stop the bot, save the profile, then relaunch a fresh process.
+
+        Handy after editing Python or JSON config: a normal restart is the
+        only way those changes take effect, and doing it from the toolbar
+        beats closing and re-running from the terminal every time.
+        """
+        reply = QMessageBox.question(
+            self, "Khởi động lại",
+            "Khởi động lại ứng dụng?\n"
+            "Bot đang chạy sẽ được dừng và profile được lưu trước.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Stop the engine cleanly so no ADB gesture is left mid-flight.
+        try:
+            if self._engine and self._engine.isRunning():
+                self._engine.stop_bot()
+                self._engine.wait(3000)
+        except Exception as exc:
+            log.error("Restart: stopping the bot failed: %s", exc)
+
+        # Persist current tab values, same as a normal close.
+        try:
+            self._profile = self._collect_profile()
+            self._save_current_profile()
+        except Exception as exc:
+            log.error("Restart: autosave failed: %s", exc)
+
+        log.info("Restarting the application …")
+        # Spawn a brand-new process from the same interpreter + argv, then
+        # quit this one. startDetached returns before we quit, so the new
+        # window comes up on its own.
+        started = QProcess.startDetached(sys.executable, sys.argv)
+        if not started:
+            log.error("Restart: could not spawn a new process.")
+            QMessageBox.warning(
+                self, "Khởi động lại",
+                "Không tạo được tiến trình mới. Hãy khởi động lại thủ công.",
+            )
+            return
+        QApplication.quit()
 
     def closeEvent(self, event) -> None:
         if self._engine and self._engine.isRunning():

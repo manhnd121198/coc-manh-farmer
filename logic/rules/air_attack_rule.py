@@ -8,6 +8,7 @@ Trigger: any selected troop has profile.kind == "air".
 
 from __future__ import annotations
 
+import math
 import time
 
 from core.adb_handler import screencap
@@ -289,57 +290,176 @@ class AirAttackRule(AttackRule):
         fresh = screencap()
         ss = fresh if fresh is not None else ctx.screenshot
 
-        for spell in selected:
+        # "advancing_line" spells (Rage/Heal) fire together as a rolling
+        # barrage: one line of drops in front of the army per wave, Rage
+        # then Heal on the same front, wait, then the next wave lands
+        # further along the push. Every other spell keeps its own schedule.
+        barrage = [
+            s for s in selected
+            if str((ctx.spell_profiles.get(s, {}) or {}).get("placement", ""))
+            == "advancing_line"
+        ]
+        others = [s for s in selected if s not in barrage]
+
+        if barrage:
+            self._deploy_barrage(ctx, barrage, cluster, target, ss)
+        for spell in others:
             if self._interrupted(ctx):
-                return
-
-            candidates = skills.target.expand_prefix(spell) or [spell]
-            hit = skills.target.find_first_of(ss, candidates)
-            if hit is None:
-                log.info(
-                    "Spell '%s': card not visible on the bar (tried %d variants) — skipped.",
-                    spell, len(candidates),
-                )
-                continue
-            _, card_x, card_y = hit
-
-            drops = skills.spell.plan_spell(
-                ss, spell, cluster, target, cfg, ctx.spell_profiles, ctx.polygon,
-            ) or [self._default_spell_drop(cluster, target)]
-
-            spell_profile = ctx.spell_profiles.get(spell, {}) or {}
-            drops_per_wave = max(1, int(spell_profile.get("drops_per_wave", len(drops))))
-            wave_interval_sec = max(0.0, float(spell_profile.get("wave_interval_sec", 0.0)))
-            drop_interval_sec = max(0.0, float(spell_profile.get("drop_interval_ms", 0))) / 1000.0
-
-            log.info("Spell '%s': selecting once, then %d drop(s) %s", spell, len(drops), drops)
-            skills.touch.tap(card_x, card_y, cfg)
-            skills.touch.pre_select_settle(cfg)
-            schedule_started_at = time.monotonic()
-            for index, (sx, sy) in enumerate(drops):
-                if self._interrupted(ctx):
-                    return
-                wave_index = index // drops_per_wave
-                if index % drops_per_wave == 0:
-                    deadline = schedule_started_at + wave_index * wave_interval_sec
-                    if not self._wait_until(ctx, deadline):
-                        return
-                    log.info(
-                        "Spell '%s': wave %d, drops %d-%d",
-                        spell,
-                        wave_index + 1,
-                        index + 1,
-                        min(index + drops_per_wave, len(drops)),
-                    )
-                # CoC keeps the same troop/spell card selected while its
-                # quantity remains. Re-tapping the card before every drop
-                # can lose selection when the bar animates or shifts.
-                skills.touch.tap(sx, sy, cfg)
-                if drop_interval_sec > 0 and index + 1 < len(drops):
-                    time.sleep(drop_interval_sec)
+                break
+            self._deploy_single_spell(ctx, spell, cluster, target, ss)
 
         # One final settle so the engine post-deploy stamp is clean.
         skills.touch.post_deploy_settle(cfg)
+
+    def _deploy_single_spell(
+        self,
+        ctx: AttackContext,
+        spell: str,
+        cluster: tuple[int, int],
+        target: tuple[int, int],
+        ss,
+    ) -> None:
+        """One spell on its own placement + wave schedule (classic path)."""
+        skills = ctx.skills
+        cfg = ctx.config
+
+        candidates = skills.target.expand_prefix(spell) or [spell]
+        hit = skills.target.find_first_of(ss, candidates)
+        if hit is None:
+            log.info(
+                "Spell '%s': card not visible on the bar (tried %d variants) — skipped.",
+                spell, len(candidates),
+            )
+            return
+        _, card_x, card_y = hit
+
+        # For "carpet the interior" placements, prefer the YOLO base hull
+        # (the actual building cluster) over the HSV red-line polygon: the
+        # red line sits out on the grass, so spells planned against it would
+        # land short of the buildings.
+        spell_profile = ctx.spell_profiles.get(spell, {}) or {}
+        poly = ctx.polygon
+        if str(spell_profile.get("placement", "")).startswith("inside_base"):
+            yolo_base = skills.red_zone.yolo_base_polygon()
+            if yolo_base is not None:
+                poly = yolo_base
+
+        drops = skills.spell.plan_spell(
+            ss, spell, cluster, target, cfg, ctx.spell_profiles, poly,
+        ) or [self._default_spell_drop(cluster, target)]
+
+        drops_per_wave = max(1, int(spell_profile.get("drops_per_wave", len(drops))))
+        wave_interval_sec = max(0.0, float(spell_profile.get("wave_interval_sec", 0.0)))
+        drop_interval_sec = max(0.0, float(spell_profile.get("drop_interval_ms", 0))) / 1000.0
+
+        # Debug overlay of the planned carpet (only for interior spreads,
+        # where `poly` is the base the drops were planned against).
+        if str(spell_profile.get("placement", "")).startswith("inside_base"):
+            skills.red_zone.dump_spell_plan(ss, poly, drops, drops_per_wave, cfg, spell)
+
+        log.info("Spell '%s': selecting once, then %d drop(s) %s", spell, len(drops), drops)
+        skills.touch.tap(card_x, card_y, cfg)
+        skills.touch.pre_select_settle(cfg)
+        schedule_started_at = time.monotonic()
+        for index, (sx, sy) in enumerate(drops):
+            if self._interrupted(ctx):
+                return
+            wave_index = index // drops_per_wave
+            if index % drops_per_wave == 0:
+                deadline = schedule_started_at + wave_index * wave_interval_sec
+                if not self._wait_until(ctx, deadline):
+                    return
+                log.info(
+                    "Spell '%s': wave %d, drops %d-%d",
+                    spell, wave_index + 1, index + 1,
+                    min(index + drops_per_wave, len(drops)),
+                )
+            # CoC keeps the same card selected while its quantity remains, so
+            # re-tapping before every drop can lose selection when the bar
+            # animates — tap the card once, then only the drop points.
+            skills.touch.tap(sx, sy, cfg)
+            if drop_interval_sec > 0 and index + 1 < len(drops):
+                time.sleep(drop_interval_sec)
+
+    def _deploy_barrage(
+        self,
+        ctx: AttackContext,
+        spells: list[str],
+        cluster: tuple[int, int],
+        target: tuple[int, int],
+        ss,
+    ) -> None:
+        """Rolling barrage: per wave, drop one line for each barrage spell
+        (Rage then Heal on the same front), then wait ``wave_interval_sec``
+        so the next wave lands further along the push.
+
+        The front is ESTIMATED geometrically — it advances along the
+        deploy→base-centre line each wave (see ``_advancing_line``). The bot
+        does not see the troops, so if they stall at a wall the line still
+        moves on. Swap this estimate for real troop detection later if
+        needed.
+        """
+        skills = ctx.skills
+        cfg = ctx.config
+
+        # Plan each barrage spell's full point list up front (wave-major:
+        # the first ``drops_per_wave`` points are wave 1's line, etc.).
+        plans: dict[str, tuple[list, int]] = {}
+        num_waves = 1
+        interval = 0.0
+        for spell in spells:
+            prof = ctx.spell_profiles.get(spell, {}) or {}
+            poly = skills.red_zone.yolo_base_polygon()
+            if poly is None:
+                poly = ctx.polygon
+            pts = skills.spell.plan_spell(
+                ss, spell, cluster, target, cfg, ctx.spell_profiles, poly,
+            ) or []
+            per_wave = max(1, int(prof.get("drops_per_wave", 5)))
+            plans[spell] = (pts, per_wave)
+            if pts:
+                num_waves = max(num_waves, math.ceil(len(pts) / per_wave))
+                skills.red_zone.dump_spell_plan(ss, poly, pts, per_wave, cfg, spell)
+            interval = max(interval, float(prof.get("wave_interval_sec", 0.0)))
+
+        log.info(
+            "Spell barrage: %s over %d wave(s), %.1fs apart.",
+            " + ".join(spells), num_waves, interval,
+        )
+
+        started_at = time.monotonic()
+        for wave in range(num_waves):
+            if self._interrupted(ctx):
+                return
+            if not self._wait_until(ctx, started_at + wave * interval):
+                return
+            # Refresh so the spell bar page is current for this wave.
+            fresh = screencap()
+            wave_ss = fresh if fresh is not None else ss
+            for spell in spells:
+                pts, per_wave = plans[spell]
+                line = pts[wave * per_wave:(wave + 1) * per_wave]
+                if not line:
+                    continue
+                candidates = skills.target.expand_prefix(spell) or [spell]
+                hit = skills.target.find_first_of(wave_ss, candidates)
+                if hit is None:
+                    log.info(
+                        "Barrage wave %d: spell '%s' card not visible — skipped.",
+                        wave + 1, spell,
+                    )
+                    continue
+                _, card_x, card_y = hit
+                log.info(
+                    "Barrage wave %d: spell '%s' → %d drop(s) %s",
+                    wave + 1, spell, len(line), line,
+                )
+                skills.touch.tap(card_x, card_y, cfg)
+                skills.touch.pre_select_settle(cfg)
+                for (sx, sy) in line:
+                    if self._interrupted(ctx):
+                        return
+                    skills.touch.tap(sx, sy, cfg)
 
     def _wait_until(self, ctx: AttackContext, deadline: float) -> bool:
         while True:
