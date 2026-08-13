@@ -197,8 +197,8 @@
     "category": "heroes",
     "label": "Grand Warden",
     "file": "assets\\templates\\heroes\\grand_warden.png",
-    "width": 85,
-    "height": 113,
+    "width": 60,
+    "height": 52,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -413,6 +413,15 @@
     "file": "assets\\templates\\spells\\heal_spell.png",
     "width": 63,
     "height": 74,
+    "screen_w": 1350,
+    "screen_h": 1080
+  },
+  "4x": {
+    "category": "ui_elements",
+    "label": "4X",
+    "file": "assets\\templates\\ui_elements\\4x.png",
+    "width": 92,
+    "height": 97,
     "screen_w": 1350,
     "screen_h": 1080
   }

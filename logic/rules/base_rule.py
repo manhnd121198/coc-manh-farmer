@@ -76,6 +76,14 @@ class AttackContext:
     polygon:        np.ndarray | None = None
     base_centroid:  tuple[int, int] | None = None
 
+    # The shape hero drops must stay OUT of, and how far outside it they
+    # have to land. Defaults to the red-zone polygon. A rule that planned
+    # its troop drops against a DIFFERENT shape sets these, so the heroes
+    # are judged by the same geometry the troops were — checking them
+    # against an unrelated second polygon rejects points that are fine.
+    deploy_guard:           np.ndarray | None = None
+    deploy_guard_margin_px: int = 25
+
 
 class AttackRule(ABC):
     """Abstract attack strategy."""

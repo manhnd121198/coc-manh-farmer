@@ -317,20 +317,51 @@ class V2Orchestrator:
             max_rounds,
         )
 
+    # The battle speed-up used to be tapped here, on a screenshot of its
+    # own. It lives in HomeVillageLogic's monitoring tick instead: that tick
+    # already screencaps every few seconds to see whether the fight is over,
+    # so the speed button rides along on a frame that was going to be taken
+    # anyway, and a tick where the button had not drawn yet is simply
+    # retried on the next one.
+
     @staticmethod
     def _sweep_up_points(ctx) -> list[tuple[int, int]]:
         """Where leftovers may land: the same ring the sweep rules use.
 
-        Built from the red-zone polygon, so it is valid whichever rule just
-        ran — nothing here assumes Ring Sweep was the one that deployed.
+        Prefers the ring offset outward from the YOLO base hull — the same
+        geometry the main deploy used — so leftovers land next to the base
+        instead of out on the red line. The hull is whatever the polygon
+        detector already cached for this frame; when it found none, this
+        falls back to the corridor inset from the red-zone polygon, which is
+        valid whichever rule just ran.
         """
-        if ctx.polygon is None:
-            return []
         screen_w = ctx.screenshot.shape[1]
-        ring = ctx.skills.ring.plan(ctx.polygon, screen_w, ctx.ui_cutoff, ctx.config)
+        ring: list[tuple[int, int]] = []
+        centre = None
+
+        # Same switch Ring Sweep reads, so both halves of one attack use the
+        # same geometry rather than drifting apart when it is turned off.
+        sweep_cfg = (ctx.config or {}).get("ring_sweep", {}) or {}
+        base_poly = None
+        if bool(sweep_cfg.get("use_yolo_corridor", False)):
+            base_poly = ctx.skills.red_zone.yolo_base_polygon()
+        if base_poly is not None:
+            ring = ctx.skills.ring.plan_from_base(
+                base_poly, screen_w, ctx.ui_cutoff, ctx.config,
+            )
+            centre = ctx.skills.red_zone.centroid(base_poly)
+
+        if not ring:
+            if ctx.polygon is None:
+                return []
+            ring = ctx.skills.ring.plan(
+                ctx.polygon, screen_w, ctx.ui_cutoff, ctx.config,
+            )
+            centre = None
         if not ring:
             return []
-        centre = ctx.base_centroid or (screen_w // 2, ctx.ui_cutoff // 2)
+
+        centre = centre or ctx.base_centroid or (screen_w // 2, ctx.ui_cutoff // 2)
         return list(ctx.skills.ring.one_point_per_side(centre, ring)) or list(ring[:1])
 
     @staticmethod

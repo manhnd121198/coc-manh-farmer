@@ -1,9 +1,8 @@
 """Tests for "skip the base instead of falling back to the legacy planner".
 
-The option only matters when V2 gives up, and the two things that can go
-wrong there are opposites: falling back when the user asked not to, and
-skipping forever when the reason V2 gives up is a setting rather than the
-base in front of it.
+The option only matters when V2 gives up. The thing to get wrong is
+handing the base to V36 anyway — the switch means never, so no run of
+skips is long enough to buy back an attack the user asked not to have.
 """
 
 import unittest
@@ -12,14 +11,11 @@ from unittest import mock
 from logic.smart_v2_logic import SmartV2Logic
 
 
-def _v2(skip_on_fallback: bool, orchestrator_succeeds: bool, limit: int = 3):
+def _v2(skip_on_fallback: bool, orchestrator_succeeds: bool):
     with mock.patch("logic.smart_v2_logic.SmartVisionV2"), \
          mock.patch("logic.smart_v2_logic.V2Orchestrator") as orch:
         logic = SmartV2Logic({}, mock.Mock(), mock.Mock(), mode_key="hv")
     logic._orchestrator.execute.return_value = orchestrator_succeeds
-    logic._orchestrator.attack_rules.return_value = {
-        "fallback": {"max_consecutive_skips": limit},
-    }
     settings = mock.patch("logic.smart_v2_logic.Settings")
     return logic, settings, skip_on_fallback
 
@@ -64,22 +60,22 @@ class FallbackBehaviourTest(unittest.TestCase):
         legacy.assert_not_called()
 
 
-class SkipCapTest(unittest.TestCase):
-    """A polygon threshold that no longer fits the device fails on every
-    base alike. Skipping each one forever pays a search fee per base and
-    never attacks, so the run has to break out on its own."""
+class SkipRunTest(unittest.TestCase):
+    """The switch means never V36. An attack the legacy planner improvises
+    is worth less than the loot it spends, so a long run of unreadable
+    bases is still a run of skips — never an attack the user asked not to
+    have. The count exists to be read in the log, not to break the run."""
 
-    def test_the_run_of_skips_is_capped(self):
-        logic, settings, skip = _v2(skip_on_fallback=True, orchestrator_succeeds=False, limit=3)
+    def test_the_run_of_skips_is_never_broken_by_an_attack(self):
+        logic, settings, skip = _v2(skip_on_fallback=True, orchestrator_succeeds=False)
         results, legacy = _run(logic, settings, skip, times=5)
 
-        # Three walked away from, then the fourth is attacked anyway, and
-        # the counter starts over.
-        self.assertEqual([False, False, False, True, False], results)
-        legacy.assert_called_once()
+        self.assertEqual([False] * 5, results)
+        legacy.assert_not_called()
+        self.assertEqual(5, logic._skipped_in_a_row)
 
     def test_a_successful_attack_clears_the_run(self):
-        logic, settings, skip = _v2(skip_on_fallback=True, orchestrator_succeeds=False, limit=2)
+        logic, settings, skip = _v2(skip_on_fallback=True, orchestrator_succeeds=False)
         _run(logic, settings, skip, times=2)
         self.assertEqual(2, logic._skipped_in_a_row)
 

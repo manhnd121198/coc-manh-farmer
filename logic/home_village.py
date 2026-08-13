@@ -41,6 +41,7 @@ class HomeVillageLogic:
         self._ocr: OCRReader = ocr
         self._attack_active = False
         self._battle_phase_done = False
+        self._speed_up_done = False
         self._engine = None
         
         self._hero_memory: list[tuple[str, int, int]] = []
@@ -168,6 +169,7 @@ class HomeVillageLogic:
             self._count_attack()
             self._attack_active = True
             self._battle_phase_done = False
+            self._speed_up_done = False
             self._initial_loot = {}
             self._execute_full_attack(screenshot)
             return
@@ -181,6 +183,7 @@ class HomeVillageLogic:
             self._count_attack()
             self._attack_active = True
             self._battle_phase_done = False
+            self._speed_up_done = False
             self._initial_loot = loot
             self._execute_full_attack(screenshot)
         else:
@@ -219,6 +222,7 @@ class HomeVillageLogic:
         self._count_attack()
         self._attack_active = True
         self._battle_phase_done = False
+        self._speed_up_done = False
 
     def _handle_in_battle(self, screenshot: np.ndarray):
         # ── RANKED-ONLY auto-activation ────────────────────────────────
@@ -233,6 +237,10 @@ class HomeVillageLogic:
 
         # ── V36: Active Monitoring Phase ────────────────
         if self._attack_active and self._battle_phase_done:
+            # This tick's screenshot was taken to see whether the fight is
+            # over; the speed button is read off the same frame.
+            self._speed_up_battle(screenshot)
+
             # NEW: post-deployment countdown → silent end-of-battle
             if self._check_deploy_timer(screenshot):
                 return
@@ -242,6 +250,35 @@ class HomeVillageLogic:
             
             if self._profile.get("retreat_heroes_dead", False):
                 self._check_hero_death_retreat(screenshot)
+
+    # ── Battle speed ────────────────────────────────────────────────────
+    def _speed_up_battle(self, screenshot: np.ndarray) -> None:
+        """Switch the fight to 4x once everything is on the field.
+
+        Only ever runs in the monitoring phase, never while deploying: the
+        speed-up scales game time and a held card empties per game-second,
+        so at 4x every hold window in the config would drain four times the
+        troops it was measured for. Once nothing is left to deploy, the only
+        thing left to spend is the three-minute clock, and 4x spends it four
+        times faster.
+
+        The template is the button in its NORMAL-speed state (it reads
+        "1x") — what is on screen while the fight is still at normal speed,
+        and tapping it is what switches to 4x. A fight already sped up shows
+        a different face and does not match, so a retry cannot toggle back;
+        the flag below is only there to stop matching a template that can no
+        longer hit on every remaining tick.
+        """
+        if self._speed_up_done:
+            return
+        hit = self._sr.find_template_by_name(screenshot, "4x")
+        if hit is None:
+            # Common and harmless: the HUD may not have drawn the button
+            # yet. The next tick looks again.
+            return
+        tap(hit[0], hit[1])
+        self._speed_up_done = True
+        log.info("Speed-up: tapped the speed button at (%d,%d) — 4x.", hit[0], hit[1])
 
     def _abandon_base(self, screenshot: np.ndarray):
         """V2 refused to deploy and the user asked for a new opponent.
@@ -255,6 +292,7 @@ class HomeVillageLogic:
         """
         self._attack_active = False
         self._battle_phase_done = False
+        self._speed_up_done = False
         # Take the next base regardless of the dice, and drop any random-skip
         # run that was still owed — this skip already cost a search.
         self._forced_skip_last = True
@@ -275,6 +313,7 @@ class HomeVillageLogic:
     def _handle_battle_ended(self, screenshot: np.ndarray):
         self._attack_active = False
         self._battle_phase_done = False
+        self._speed_up_done = False
         self._hero_memory.clear()
         m = self._sr.find_template_by_name(screenshot, "return_home")
         if m: tap(m[0], m[1])

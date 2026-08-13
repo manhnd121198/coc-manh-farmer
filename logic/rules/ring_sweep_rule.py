@@ -189,6 +189,15 @@ class RingSweepRule(AirAttackRule):
                 or ctx.base_centroid
                 or (screen_w // 2, ctx.ui_cutoff // 2)
             )
+            # Heroes go down on this same ring, so judge them by the base
+            # hull the ring was built from rather than the red-zone polygon.
+            # That polygon is the hull of every red pixel on the base and
+            # reaches well past the real boundary — measured against it, a
+            # ring point sitting on open grass reads as inside the base and
+            # every hero gets skipped. Margin 0: "not on the base" is the
+            # whole requirement, and the ring already stands clear of it.
+            ctx.deploy_guard = base_poly
+            ctx.deploy_guard_margin_px = 0
             log.info(
                 "RingSweep: corridor from YOLO base (offset %dpx from base edges).",
                 int(sweep_cfg.get("yolo_deploy_offset_px", 15)),

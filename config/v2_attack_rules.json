@@ -26,7 +26,7 @@
     "hsv_v_min": 110,
     "use_inversion_fallback": true,
     "fuse_top_k": 5,
-    "debug_dump": "assets/logs/redzone_debug",
+    "debug_dump": "",
     "morph_close_h_kernel": [
       35,
       3
@@ -75,7 +75,7 @@
     "hold_points": 4,
     "hold_points_by_troop": {
       "_default": 4,
-      "baba": 4,
+      "baba": 1,
       "valkyrie": 2,
       "dragon": 1
     },
@@ -94,7 +94,11 @@
       "valkyrie": [
         1000,
         2000
-      ]
+      ],
+	  "dragon": [
+        2000,
+        2100
+	  ]
     }
   },
   "hero_ability": {
@@ -156,9 +160,5 @@
     "empty_saturation": 60,
     "empty_brightness": 140,
     "card_sample_px": 22
-  },
-  "fallback": {
-    "_comment": "Caps the 'skip instead of falling back to V36' switch in Settings. V2 gives up for reasons that belong to the bot rather than to the base -- a polygon threshold that no longer matches this device fails on every base alike -- so an uncapped skip would walk away from base after base, paying the search fee each time and never attacking. After this many skips in a row the bot attacks with the legacy planner instead.",
-    "max_consecutive_skips": 3
   }
 }

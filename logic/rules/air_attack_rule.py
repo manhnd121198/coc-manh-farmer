@@ -158,14 +158,17 @@ class AirAttackRule(AttackRule):
                 break
             if not self._is_safe_deploy_point(ctx, drop_xy):
                 if not self._is_safe_deploy_point(ctx, cluster):
+                    # Named after the rule that actually ran: Ring Sweep
+                    # inherits this method, and a hardcoded "AirAttack"
+                    # sends anyone reading the log after the wrong rule.
                     log.warning(
-                        "AirAttack: hero '%s' has no point safely outside red zone — skipped.",
-                        name,
+                        "%s: hero '%s' has no point safely outside red zone — skipped.",
+                        self.name, name,
                     )
                     continue
                 log.warning(
-                    "AirAttack: hero '%s' jitter entered red zone; using cluster (%d,%d).",
-                    name, cluster[0], cluster[1],
+                    "%s: hero '%s' jitter entered red zone; using cluster (%d,%d).",
+                    self.name, name, cluster[0], cluster[1],
                 )
                 drop_xy = cluster
             skills.touch.tap(card_xy[0], card_xy[1], cfg)
@@ -179,11 +182,25 @@ class AirAttackRule(AttackRule):
     def _is_safe_deploy_point(
         ctx: AttackContext,
         point: tuple[int, int],
-        margin_px: int = 25,
+        margin_px: int | None = None,
     ) -> bool:
-        polygon = getattr(ctx, "polygon", None)
+        """Whether a drop lands clear of the no-deploy shape.
+
+        Judged against ``ctx.deploy_guard`` when the rule set one, else the
+        red-zone polygon. That matters because the two are not the same
+        shape: the red-zone polygon is the hull of every red pixel in the
+        base, so it reaches past the real boundary, while the YOLO base hull
+        traces the buildings. A rule that planned its drops against one of
+        them must be checked against that same one — measuring the drop off
+        the other rejects points sitting on perfectly good grass.
+        """
+        polygon = getattr(ctx, "deploy_guard", None)
+        if polygon is None:
+            polygon = getattr(ctx, "polygon", None)
         if polygon is None or len(polygon) < 3:
             return True
+        if margin_px is None:
+            margin_px = int(getattr(ctx, "deploy_guard_margin_px", 25))
         x, y = point
         return not ctx.skills.red_zone.is_inside(
             polygon, int(x), int(y), margin=margin_px,

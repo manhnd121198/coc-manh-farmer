@@ -146,8 +146,9 @@ _DEFAULTS: dict = {
     "v2_rule_bb":         "auto",
 
     # When V2 cannot read the base, walk away and look for another one
-    # instead of attacking with the legacy planner. Capped in
-    # config/v2_attack_rules.json -> fallback.max_consecutive_skips.
+    # instead of attacking with the legacy planner. Uncapped: the base is
+    # left alone however many times in a row that happens, so watch the
+    # run length in the log — a run that keeps climbing is a setting to fix.
     "v2_skip_on_fallback": False,
 
     # Game Presence

@@ -62,17 +62,17 @@ def calibrated_label() -> str:
 # the gem purchase dialog instead of starting the attack.
 #
 # The waits are the panel-open animations, not think-time — they only need
-# to outlast the slide-in. 0.5 s is deliberately tight: if a panel is still
-# animating the tap lands on nothing and the whole chain misses, so this is
-# the first thing to raise again if attacks stop starting.
+# to outlast the slide-in. 0.5 s was too tight: a panel still animating
+# swallows the tap and the whole chain misses, so this is the first thing to
+# raise again if attacks stop starting.
 #
 # The last wait is the safest of the three to cut. Nothing follows it inside
 # this module; it only delays handing control back, and the engine's next
 # tick re-reads the screen properly either way.
 STEPS: tuple[tuple[int, int, float], ...] = (
-    (98, 1030, 0.5),    # Attack!            (home village)
-    (258, 744, 0.5),    # Find a Match       (multiplayer panel)
-    (1141, 806, 0.5),   # Attack!            (army panel)
+    (98, 1030, 0.75),   # Attack!            (home village)
+    (258, 744, 0.75),   # Find a Match       (multiplayer panel)
+    (1141, 806, 0.75),  # Attack!            (army panel)
 )
 
 

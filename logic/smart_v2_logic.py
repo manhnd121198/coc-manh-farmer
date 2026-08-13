@@ -122,28 +122,18 @@ class SmartV2Logic:
     def _should_skip_instead_of_falling_back(self) -> bool:
         """Whether to walk away rather than deploy with the legacy planner.
 
-        The cap is the important half. V2 gives up for reasons that belong
-        to the *bot*, not to the base — a polygon threshold that no longer
-        matches this device makes every single base fail. Without a limit
-        the bot would skip base after base forever, paying the search cost
-        each time and never attacking. After a few in a row it stops being
-        bad luck and starts being a misconfiguration, so we take the ugly
-        attack rather than burn the account's gold on searches.
+        With the switch on this NEVER hands the base to V36: an attack the
+        legacy planner improvises is worth less than the loot it spends, so
+        the base is left alone however many times in a row that happens.
+
+        Nothing breaks the run out on its own any more. V2 gives up for
+        reasons that belong to the *bot* as often as to the base — a polygon
+        threshold that no longer fits this device fails on every base alike
+        — and that now shows up as an unbroken run of skips, each one still
+        paying its search fee. The count in the skip log is the signal to
+        watch: a run that keeps climbing is a setting to fix, not bad luck.
         """
-        if not bool(Settings().get("v2_skip_on_fallback", False)):
-            return False
-        cfg = self._orchestrator.attack_rules().get("fallback", {}) or {}
-        limit = max(1, int(cfg.get("max_consecutive_skips", 3)))
-        if self._skipped_in_a_row >= limit:
-            log.warning(
-                "V2 has given up on %d base(s) in a row — that is a setting "
-                "problem, not luck. Attacking with the legacy planner this "
-                "time instead of skipping again.",
-                self._skipped_in_a_row,
-            )
-            self._skipped_in_a_row = 0
-            return False
-        return True
+        return bool(Settings().get("v2_skip_on_fallback", False))
 
     # ── Legacy V36 path (ULTIMATE FALLBACK) ─────────────────────────
     def _legacy_run(self, screenshot: np.ndarray, mode: Mode, target: str) -> None:
