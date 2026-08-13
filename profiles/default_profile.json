@@ -13,16 +13,19 @@
   "retreat_dark_elixir": 0,
   "retreat_time": 0,
   "deploy_timer_enabled": true,
-  "deploy_timer_seconds": 95,
+  "deploy_timer_seconds": 135,
   "hv_match_mode": "normal",
   "attack_strategy": "smart_target",
   "macro_file": "recordings\\hv_attack_macro.json",
   "selected_troops": [
     "baba",
-    "valkyrie",
     "dragon"
   ],
-  "selected_heroes": [],
+  "selected_heroes": [
+    "archer_queen",
+    "barbarian_king",
+    "grand_warden"
+  ],
   "selected_spells": [],
   "bb_attack_mode": "t\u1eadp luy\u1ec7n",
   "bb_attack_strategy": "smart_target",
