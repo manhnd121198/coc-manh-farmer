@@ -53,6 +53,7 @@ from logic.skills import (
 )
 from vision.screen_reader import ScreenReader
 from vision.skills import (
+    CardStateSkill,
     CornerSelectorSkill,
     IsometricGridSkill,
     ObstacleDetectorSkill,
@@ -181,7 +182,7 @@ class V2Orchestrator:
         if polygon is None:
             log.warning(
                 "V2 polygon detection FAILED (HSV + inversion both rejected) "
-                "— falling back to legacy V36.",
+                "— V2 gives up on this base.",
             )
             return False
         base_centroid = self._skills.red_zone.centroid(polygon)
@@ -195,7 +196,7 @@ class V2Orchestrator:
             mode_key=mode_key,
         )
         if rule is None:
-            log.warning("V2 no rule matched — caller must use V36 fallback.")
+            log.warning("V2 no rule matched — V2 gives up on this base.")
             return False
 
         ctx = AttackContext(
@@ -237,11 +238,116 @@ class V2Orchestrator:
                         )
                         return False
             if not ok:
-                log.warning("V2 rule chain exhausted — falling back to legacy V36.")
+                log.warning("V2 rule chain exhausted — V2 gives up on this base.")
                 return False
+
+        self._sweep_up(ctx)
 
         log.info("V2 END   rule=%s", rule.name)
         return True
+
+    # ── Sweep-up ────────────────────────────────────────────────────────
+    # Rules deploy to a *plan*, not to a result: Ring Sweep holds each side
+    # for a fixed window, and a window shorter than the army leaves troops
+    # on the card (a held card empties at roughly 7 per second). Cards the
+    # rule could not find are skipped outright. Either way the leftovers are
+    # troops already paid for that never fought.
+    #
+    # So once the rule is done, look at the bar again and empty whatever is
+    # still sitting there.
+
+    def _sweep_up(self, ctx) -> None:
+        if not bool(Settings().get("sweep_up_enabled", False)):
+            return
+
+        cfg = ctx.config
+        sweep = cfg.get("sweep_up", {}) or {}
+        max_rounds = max(1, int(sweep.get("max_rounds", 2)))
+        hold_ms = max(500, int(sweep.get("hold_ms", 4000)))
+
+        drops = self._sweep_up_points(ctx)
+        if not drops:
+            log.warning("Sweep-up: no safe drop point from the polygon — skipped.")
+            return
+
+        troops = ctx.profile.get(
+            "bb_selected_troops" if ctx.mode_key == "bb" else "selected_troops", [],
+        ) or []
+
+        for round_no in range(1, max_rounds + 1):
+            if self._is_interrupted(ctx.engine):
+                return
+            shot = screencap()
+            if shot is None:
+                log.warning("Sweep-up: no screenshot — stopping.")
+                return
+
+            leftovers = []
+            for troop in troops:
+                card = ctx.skills.target.find_one(shot, troop)
+                if card is None:
+                    # A card the bar no longer shows at all is empty enough.
+                    continue
+                if ctx.skills.card.has_troops_left(shot, card, cfg, troop):
+                    leftovers.append((troop, card))
+
+            if not leftovers:
+                log.info("Sweep-up: round %d found nothing left. Done.", round_no)
+                return
+
+            log.info(
+                "Sweep-up: round %d/%d emptying %s",
+                round_no, max_rounds, ", ".join(t for t, _ in leftovers),
+            )
+            for index, (troop, card) in enumerate(leftovers):
+                if self._is_interrupted(ctx.engine):
+                    return
+                # Spread the rounds over the ring instead of piling every
+                # leftover on one spot.
+                x, y = drops[(round_no + index) % len(drops)]
+                ctx.skills.touch.tap(card[0], card[1], cfg)
+                ctx.skills.touch.pre_select_settle(cfg)
+                ctx.skills.touch.long_press(x, y, hold_ms, cfg)
+
+            self._restamp_post_deploy(ctx)
+
+        log.info(
+            "Sweep-up: stopped after %d round(s) — cards may still read as "
+            "full. Check the sat/val numbers above against config.sweep_up.",
+            max_rounds,
+        )
+
+    @staticmethod
+    def _sweep_up_points(ctx) -> list[tuple[int, int]]:
+        """Where leftovers may land: the same ring the sweep rules use.
+
+        Built from the red-zone polygon, so it is valid whichever rule just
+        ran — nothing here assumes Ring Sweep was the one that deployed.
+        """
+        if ctx.polygon is None:
+            return []
+        screen_w = ctx.screenshot.shape[1]
+        ring = ctx.skills.ring.plan(ctx.polygon, screen_w, ctx.ui_cutoff, ctx.config)
+        if not ring:
+            return []
+        centre = ctx.base_centroid or (screen_w // 2, ctx.ui_cutoff // 2)
+        return list(ctx.skills.ring.one_point_per_side(centre, ring)) or list(ring[:1])
+
+    @staticmethod
+    def _restamp_post_deploy(ctx) -> None:
+        """Push the deploy countdown back to now.
+
+        The rule stamped it when *it* finished; without this, every second
+        the sweep-up spends is a second stolen from ``deploy_timer_seconds``
+        and the battle ends earlier than the user asked for.
+        """
+        engine = ctx.engine
+        if engine is None:
+            return
+        try:
+            engine._home_logic._post_deploy_time = time.time()
+        except Exception:
+            pass
 
     def _build_skills(self) -> SkillBundle:
         target = TargetLocatorSkill(self._sr)
@@ -252,6 +358,7 @@ class V2Orchestrator:
             obstacle = ObstacleDetectorSkill(),
             target   = target,
             corner   = CornerSelectorSkill(target),
+            card     = CardStateSkill(),
             touch    = HumanTouchSkill(),
             fan      = FanPlannerSkill(),
             funnel   = FunnelPlannerSkill(),

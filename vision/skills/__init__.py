@@ -6,6 +6,7 @@ from vision.skills.safe_corridor import SafeCorridorSkill
 from vision.skills.obstacle_detector import ObstacleDetectorSkill
 from vision.skills.target_locator import TargetLocatorSkill
 from vision.skills.corner_selector import CornerSelectorSkill
+from vision.skills.card_state import CardStateSkill
 
 __all__ = [
     "RedZonePolygonSkill",
@@ -14,4 +15,5 @@ __all__ = [
     "ObstacleDetectorSkill",
     "TargetLocatorSkill",
     "CornerSelectorSkill",
+    "CardStateSkill",
 ]

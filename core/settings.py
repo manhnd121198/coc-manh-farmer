@@ -106,6 +106,11 @@ _DEFAULTS: dict = {
     # root, so it is off by default and falls back on its own.
     "multi_touch_enabled": False,
 
+    # After a V2 rule finishes, read the troop bar again and empty any card
+    # that still has troops on it. Off by default: it judges cards by
+    # colour, and those thresholds need one look at the log per device.
+    "sweep_up_enabled": False,
+
     # Vision toggles
     "skip_loot_ocr": False,
     "skip_timer_ocr": False,
@@ -140,10 +145,35 @@ _DEFAULTS: dict = {
     "v2_rule_hv":         "auto",
     "v2_rule_bb":         "auto",
 
+    # When V2 cannot read the base, walk away and look for another one
+    # instead of attacking with the legacy planner. Capped in
+    # config/v2_attack_rules.json -> fallback.max_consecutive_skips.
+    "v2_skip_on_fallback": False,
+
     # Game Presence
     "game_package": "com.supercell.clashofclans",
     "game_check_interval": 60,
     "auto_launch_game": True,
+
+    # Giả lập treo thì tự tắt hẳn máy ảo rồi bật lại (LDPlayer, qua
+    # ldconsole.exe). Tắt mặc định: nó đóng máy ảo của người dùng, mất
+    # mọi thứ đang mở trong đó, nên phải là lựa chọn có ý thức.
+    # Để trống đường dẫn là tự dò các chỗ cài thường gặp.
+    # Có tên máy ảo thì dùng tên, không thì dùng index — thêm/xoá máy ảo
+    # làm index xô hết, mà nhầm index nghĩa là khởi động lại nhầm máy.
+    "emulator_auto_restart": False,
+    "emulator_console_path": "",
+    "emulator_name": "",
+    "emulator_index": 0,
+
+    # Chu kỳ chơi — nghỉ. Chơi một đoạn dài ngẫu nhiên rồi TẮT HẲN game,
+    # nghỉ một đoạn ngẫu nhiên nữa rồi mở lại chạy tiếp. Tính bằng phút.
+    # Tắt mặc định vì nó tự ý đóng game của người dùng.
+    "session_cycle_enabled": False,
+    "session_play_min_min": 60.0,
+    "session_play_max_min": 75.0,
+    "session_break_min_min": 5.0,
+    "session_break_max_min": 10.0,
 }
 
 

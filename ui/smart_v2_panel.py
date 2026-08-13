@@ -34,7 +34,7 @@ _BUILDING_CATEGORIES = ("buildings", "builder_base", "custom")
 _RULE_OPTIONS = [
     ("Auto  — bot tự chọn cách đánh hợp nhất", "auto"),
     ("Mặc định  — tìm hành lang rộng nhất rồi giữ thả",      "smart_default"),
-    ("Ring Sweep  — hold 1 điểm mỗi cạnh base (sát vùng đỏ)", "ring_sweep"),
+    ("Ring Sweep  — hold 4 điểm quanh base (sát vùng đỏ)", "ring_sweep"),
     ("Quét viền  — vuốt quanh map, điểm bắt đầu ngẫu nhiên", "perimeter_sweep"),
     ("Đánh không quân  — dàn theo hành lang bay an toàn",    "air_attack"),
     ("Bộ binh mở phễu  — 2 mũi mở đường rồi thả đợt chính",  "ground_funnel"),

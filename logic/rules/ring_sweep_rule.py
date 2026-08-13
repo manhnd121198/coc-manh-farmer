@@ -48,6 +48,47 @@ class RingSweepRule(AirAttackRule):
         return True
 
     @staticmethod
+    def _troop_entry(table: dict, troop: str, fallback):
+        """This troop's row, else ``_default``, else ``fallback``.
+
+        The name is matched case-insensitively. Card templates are all
+        lowercase but the config is hand-written, and a key that differs
+        only in case fails completely silently — the troop just quietly
+        gets the default for the rest of the session.
+        """
+        if not isinstance(table, dict):
+            return fallback
+        if troop in table:
+            return table[troop]
+        wanted = str(troop).casefold()
+        for key, value in table.items():
+            if key != "_default" and str(key).casefold() == wanted:
+                return value
+        return table.get("_default", fallback)
+
+    @staticmethod
+    def _hold_points(sweep_cfg: dict, troop: str) -> int:
+        """How many points THIS troop's card is emptied into.
+
+        4 is one per side of a normal base. More splits the army finer
+        (and needs that many fingers to land together), fewer concentrates
+        it. Per troop because armies are not uniform: a wall breaker wants
+        one spot next to the funnel, dragons want every side at once.
+
+        ``hold_points_by_troop`` keys by troop name — same key as the card
+        template — and falls back through ``_default`` to the flat
+        ``hold_points``, so an existing config with only the scalar keeps
+        behaving exactly as it did.
+        """
+        table = sweep_cfg.get("hold_points_by_troop", {}) or {}
+        flat = sweep_cfg.get("hold_points", 4)
+        raw = RingSweepRule._troop_entry(table, troop, flat)
+        try:
+            return max(1, int(raw))
+        except (TypeError, ValueError):
+            return 4
+
+    @staticmethod
     def _hold_window_ms(sweep_cfg: dict, troop: str) -> int:
         """How long this troop's card is held at ONE side.
 
@@ -56,7 +97,7 @@ class RingSweepRule(AirAttackRule):
         one attack nor two attacks hold for the same time.
         """
         table = sweep_cfg.get("hold_ms_by_troop", {}) or {}
-        band = table.get(troop) or table.get("_default") or [5000, 6000]
+        band = RingSweepRule._troop_entry(table, troop, None) or [5000, 6000]
         try:
             lo, hi = int(band[0]), int(band[-1])
         except (TypeError, ValueError, IndexError):
@@ -146,14 +187,15 @@ class RingSweepRule(AirAttackRule):
                 log.warning("RingSweep: troop '%s' card not visible — skipped.", troop)
                 continue
 
-            drops = skills.ring.one_point_per_side(centre, ring)
+            wanted = self._hold_points(sweep_cfg, troop)
+            drops = skills.ring.pick_drops(centre, ring, wanted)
             if not drops:
                 continue
             hero_drop = drops[0]
 
             log.info(
-                "RingSweep: troop=%s holding %d side(s) %s",
-                troop, len(drops), drops,
+                "RingSweep: troop=%s holding %d of %d requested point(s) %s",
+                troop, len(drops), wanted, drops,
             )
             skills.touch.tap(card[0], card[1], cfg)
             skills.touch.pre_select_settle(cfg)

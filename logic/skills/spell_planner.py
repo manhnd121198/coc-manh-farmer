@@ -10,7 +10,8 @@ Inputs:
                      placements.
 
 Behaviour by placement:
-    "ahead"     → along (cluster→target) at config.path_fraction.
+    "ahead"     → along (cluster→target) at config.path_fraction; with
+                  drop_count > 1 the drops step forward by path_fraction_step.
     "on_army"   → near cluster (small jitter).
     "on_target" → on the closest match of target_priority assets.
     "on_wall"   → middle of the cluster→target line (jump/earthquake).
@@ -61,7 +62,18 @@ class SpellPlannerSkill:
 
         if placement == "ahead":
             frac = float(profile.get("path_fraction", 0.65))
-            out.append(self._on_path(cluster_xy, target_xy, frac))
+            # Several rages stacked on one spot waste each other — the radii
+            # overlap. Spread them forward along the push line instead, so
+            # the army keeps running through fresh ones as it advances.
+            spread = float(profile.get("path_fraction_step", 0.10))
+            for i in range(drop_count):
+                step = min(0.95, frac + spread * i)
+                px, py = self._on_path(cluster_xy, target_xy, step)
+                if i == 0:
+                    out.append((px, py))
+                else:
+                    out.append((px + random.randint(-15, 15),
+                                py + random.randint(-15, 15)))
 
         elif placement == "on_army":
             # The deployment cluster is normally outside the base.  Move

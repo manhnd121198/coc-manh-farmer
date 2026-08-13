@@ -1,4 +1,13 @@
 {
+  "ok_button": {
+    "category": "ui_elements",
+    "label": "Ok Button",
+    "file": "assets\\templates\\ui_elements\\ok_button.png",
+    "width": 173,
+    "height": 72,
+    "screen_w": 1350,
+    "screen_h": 1080
+  },
   "normal_mode_btn": {
     "category": "ui_elements",
     "label": "Normal Mode Btn",
@@ -86,8 +95,10 @@
     "category": "heroes",
     "label": "Archer Queen",
     "file": "assets\\templates\\heroes\\archer_queen.png",
-    "width": 164,
-    "height": 225
+    "width": 85,
+    "height": 116,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "town_hall": {
     "category": "buildings",
@@ -177,15 +188,19 @@
     "category": "heroes",
     "label": "Barbarian King",
     "file": "assets\\templates\\heroes\\barbarian_king.png",
-    "width": 166,
-    "height": 225
+    "width": 85,
+    "height": 113,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "grand_warden": {
     "category": "heroes",
     "label": "Grand Warden",
     "file": "assets\\templates\\heroes\\grand_warden.png",
-    "width": 166,
-    "height": 220
+    "width": 85,
+    "height": 113,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "dragon_duke": {
     "category": "heroes",
@@ -239,8 +254,10 @@
     "category": "heroes",
     "label": "Battle Machine Bb",
     "file": "assets\\templates\\heroes\\battle_machine_bb.png",
-    "width": 166,
-    "height": 165
+    "width": 109,
+    "height": 137,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bomber_bb": {
     "category": "troops",
@@ -253,8 +270,10 @@
     "category": "troops",
     "label": "Witch Bb",
     "file": "assets\\templates\\troops\\witch_bb.png",
-    "width": 166,
-    "height": 166
+    "width": 102,
+    "height": 106,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "bb_attack_confirm": {
     "category": "builder_base",
@@ -349,8 +368,8 @@
     "category": "troops",
     "label": "Baba",
     "file": "assets\\templates\\troops\\baba.png",
-    "width": 76,
-    "height": 97,
+    "width": 93,
+    "height": 114,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -365,8 +384,8 @@
     "category": "troops",
     "label": "Valkyrie",
     "file": "assets\\templates\\troops\\valkyrie.png",
-    "width": 76,
-    "height": 97,
+    "width": 85,
+    "height": 112,
     "screen_w": 1350,
     "screen_h": 1080
   },

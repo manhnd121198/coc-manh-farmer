@@ -58,9 +58,16 @@
     "deploy_steps_per_leg": 3
   },
   "ring_sweep": {
-    "_comment": "Pick ONE random point per side of the base and hold it, sides in random order. hold_ms_by_troop is the hold at EACH side as [min,max] ms, re-rolled per side. Size it from the army: a held card empties at roughly 7 troops/second, so hold_ms = troop_count / 4 sides / 7 * 1000 -- 50 troops is ~1800ms, 100 is ~3600ms, 200 is ~7100ms. Too long only wastes battle time; the card stops producing once it is empty. Key by troop name (same key as the card template) and _default covers the rest.",
+    "_comment": "Hold N random points around the base, spread round-robin over the sides in random order. Both knobs are per troop: hold_points_by_troop is how many points that card is emptied into, hold_ms_by_troop is the hold at EACH point as [min,max] ms re-rolled per point. Both key by troop name (same key as the card template), fall back to _default, and hold_points_by_troop falls back again to the flat hold_points. 4 points is one per side; raising it comes back round for a second point per side, lowering it concentrates the army. It cannot exceed points_per_side*4 (the ring size) and multi-finger deploy tops out at 10 fingers. Size the hold from the army: a held card empties at roughly 7 troops/second, so hold_ms = troop_count / hold_points / 7 * 1000 -- at 4 points, 50 troops is ~1800ms, 100 is ~3600ms, 200 is ~7100ms. Fewer points means each one must be held proportionally LONGER or the card is left with troops in it. Too long only wastes battle time; the card stops producing once it is empty.",
     "clearance_px": 45,
     "points_per_side": 4,
+    "hold_points": 4,
+    "hold_points_by_troop": {
+      "_default": 4,
+      "baba": 1,
+      "valkyrie": 2,
+      "dragon": 1
+    },
     "min_valid_points": 6,
     "edge_margin_px": 60,
     "corner_miter": 1.5,
@@ -77,11 +84,19 @@
       "valkyrie": [
         1000,
         2000
+      ],
+      "dragon": [
+        2000,
+        2100
       ]
     }
   },
   "hero_ability": {
-    "trigger_after_engagement_sec": 2.0,
+    "_comment": "trigger_after_engagement_sec là khoảng chờ sau khi quân đã xuống rồi mới double-tap thẻ hero để kích kỹ năng. Ghi [min,max] giây, roll lại mỗi trận nên không trận nào kích đúng cùng một nhịp; ghi một số trần vẫn chạy và hiểu là chờ cố định. Đặt thành \"auto\" (hoặc null) thì bot không bấm thẻ nữa -- game sẽ tự phát kỹ năng lúc hero sắp hết máu, muộn hơn bấm tay nhưng là nhịp của chính con hero và không phí kỹ năng lên con hero còn đầy máu. Khoảng chờ thì vẫn diễn ra ở cả hai trường hợp: spell thả sau đó cần quân đã giao chiến rồi, nên để \"auto\" thì nó rơi về dải mặc định 3-5s. double_tap_gap_ms là khoảng cách giữa hai cái tap -- nhanh quá thì game đọc thành một tap, chậm quá thì đọc thành hai lần chọn thẻ. File này phải lưu bằng UTF-8.",
+    "trigger_after_engagement_sec": [
+      3.0,
+      5.0
+    ],
     "double_tap_gap_ms": 80
   },
   "funnel": {
@@ -127,5 +142,17 @@
     "invert_x": false,
     "invert_y": false,
     "touch_major": 60
+  },
+  "sweep_up": {
+    "_comment": "Wiring for the 'Deploy leftover troops' switch in Settings. After a rule finishes, the troop bar is read again and any card that still looks live is emptied onto the ring. A card is judged EMPTY only when BOTH its mean saturation and mean brightness fall below the values here -- CoC greys an emptied card out, the same signal the hero-death sensor uses. These are per-device: every check logs the sat/val it measured, so watch one attack and set them between the two clusters. max_rounds caps the sweep so a card misread as full cannot hold the bot in the battle.",
+    "max_rounds": 2,
+    "hold_ms": 4000,
+    "empty_saturation": 60,
+    "empty_brightness": 140,
+    "card_sample_px": 22
+  },
+  "fallback": {
+    "_comment": "Caps the 'skip instead of falling back to V36' switch in Settings. V2 gives up for reasons that belong to the bot rather than to the base -- a polygon threshold that no longer matches this device fails on every base alike -- so an uncapped skip would walk away from base after base, paying the search fee each time and never attacking. After this many skips in a row the bot attacks with the legacy planner instead.",
+    "max_consecutive_skips": 3
   }
 }

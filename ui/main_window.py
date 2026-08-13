@@ -92,6 +92,14 @@ class MainWindow(QMainWindow):
         self._start_act.triggered.connect(self._start_bot)
         toolbar.addAction(self._start_act)
 
+        # Checkable so one button carries both directions. Kept next to Stop
+        # because the two are the same decision at different strengths.
+        self._pause_act = QAction("⏸  Tạm dừng", self)
+        self._pause_act.setCheckable(True)
+        self._pause_act.setEnabled(False)
+        self._pause_act.toggled.connect(self._toggle_pause)
+        toolbar.addAction(self._pause_act)
+
         self._stop_act = QAction("■  Stop Bot", self)
         self._stop_act.setEnabled(False)
         self._stop_act.triggered.connect(self._stop_bot)
@@ -297,6 +305,8 @@ class MainWindow(QMainWindow):
 
         self._start_act.setEnabled(False)
         self._stop_act.setEnabled(True)
+        self._pause_act.setEnabled(True)
+        self._reset_pause_button()
         self._adb_label.setText("● ADB: Đang chạy")
         self._adb_label.setStyleSheet("color: #4caf50; font-weight: bold; padding: 0 12px;")
         self.statusBar().showMessage(f"Bot running — {mode}")
@@ -308,11 +318,52 @@ class MainWindow(QMainWindow):
             if v2 is not None and hasattr(v2, "set_engine"):
                 v2.set_engine(self._engine)
 
+        # Nút "Chạy thử chu kỳ" bên tab Cài đặt cần đúng engine đang chạy.
+        self._settings_tab.set_engine(self._engine)
+
+    def _toggle_pause(self, paused: bool) -> None:
+        """Hold the bot where it is without tearing the session down.
+
+        Stop kills the thread and resets the battle tally; this only makes
+        ``run()`` idle. Anything mid-attack notices too — the deploy loops
+        poll ``_is_interrupted()``, which reads the same flag — so a pause
+        lands within a tick instead of after the current base.
+        """
+        if self._engine is None or not self._engine.isRunning():
+            return
+
+        if paused:
+            self._engine.pause()
+            self._pause_act.setText("▶  Chạy tiếp")
+            self._adb_label.setText("● TẠM DỪNG")
+            self._adb_label.setStyleSheet("color: #e9b44c; font-weight: bold; padding: 0 12px;")
+            self.statusBar().showMessage("Bot tạm dừng — bấm ▶ Chạy tiếp để chạy lại.")
+        else:
+            self._engine.resume()
+            self._pause_act.setText("⏸  Tạm dừng")
+            self._adb_label.setText("● ADB: Đang chạy")
+            self._adb_label.setStyleSheet("color: #4caf50; font-weight: bold; padding: 0 12px;")
+            self.statusBar().showMessage("Bot chạy tiếp.")
+
+    def _reset_pause_button(self) -> None:
+        """Put the button back to 'not paused' without touching the engine.
+
+        Signals are blocked because the engine drives its own pauses too
+        (stuck detection at ``_tick``), and those come back through
+        ``resume()`` directly — re-emitting from here would fight it.
+        """
+        self._pause_act.blockSignals(True)
+        self._pause_act.setChecked(False)
+        self._pause_act.blockSignals(False)
+        self._pause_act.setText("⏸  Tạm dừng")
+
     def _stop_bot(self) -> None:
         if self._engine:
             self._engine.stop_bot()
         self._start_act.setEnabled(True)
         self._stop_act.setEnabled(False)
+        self._pause_act.setEnabled(False)
+        self._reset_pause_button()
         self._home_tab.set_running_state(False)
         self._bb_tab.set_running_state(False)
         self._adb_label.setText("● ADB: Nghỉ")
@@ -323,6 +374,7 @@ class MainWindow(QMainWindow):
             v2 = getattr(tab, "_v2", None)
             if v2 is not None and hasattr(v2, "set_engine"):
                 v2.set_engine(None)
+        self._settings_tab.set_engine(None)
 
     # ═══════════════════════════════════════════════════════════════════
     #  Interactive Assist — "Help Me" Dialog
@@ -341,6 +393,9 @@ class MainWindow(QMainWindow):
         if self._engine:
             self._engine.handle_assist_result(action, data)
 
+        # handle_assist_result() ends in resume(), so the button must not be
+        # left showing "Chạy tiếp" for a bot that is already running.
+        self._reset_pause_button()
         self._adb_label.setText("● ADB: Đang chạy")
         self._adb_label.setStyleSheet("color: #4caf50; font-weight: bold; padding: 0 12px;")
         self.statusBar().showMessage("Bot resumed after assist.")
@@ -403,6 +458,9 @@ class MainWindow(QMainWindow):
         return {
             # HV thresholds
             "min_gold": 200000, "min_elixir": 200000, "min_dark_elixir": 1000,
+            # HV random skip (Normal matchmaking only)
+            "hv_random_skip_enabled": False, "hv_random_skip_chance": 20,
+            "hv_random_skip_min": 1, "hv_random_skip_max": 2,
             # HV retreat
             "auto_retreat_enabled": False, "retreat_heroes_dead": False,
             "retreat_gold": 50000, "retreat_elixir": 50000,

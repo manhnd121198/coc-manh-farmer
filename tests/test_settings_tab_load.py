@@ -33,6 +33,9 @@ class SettingsTabLoadTest(unittest.TestCase):
         "vision_ui_threshold": 0.80,
         "vision_troop_threshold": 0.35,
         "vision_building_threshold": 0.38,
+        "session_cycle_enabled": True,
+        "session_play_min_min": 42.0,
+        "session_break_max_min": 12.0,
     }
 
     def setUp(self):
@@ -84,6 +87,8 @@ class SettingsTabLoadTest(unittest.TestCase):
             tab._spin_troop_thr, tab._spin_ui_thr, tab._spin_building_thr,
             tab._spin_ocr_interval, tab._spin_hero_delay, tab._spin_jitter,
             tab._edit_game_pkg, tab._spin_game_interval, tab._chk_auto_launch,
+            tab._chk_session_cycle, tab._spin_play_min, tab._spin_play_max,
+            tab._spin_break_min, tab._spin_break_max,
             tab._spin_max_lines, tab._spin_font, tab._chk_debug,
         ]
         missing = [w for w in loaded if id(w) not in blocked]

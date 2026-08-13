@@ -89,20 +89,20 @@ class SweepRulesUseDeployLineTest(unittest.TestCase):
         """``quick_swipe`` pans the camera and drops nothing — a sweep rule
         that reaches for it would run a whole attack deploying no troops."""
         for name in ("ring_sweep_rule.py", "perimeter_sweep_rule.py"):
-            source = pathlib.Path("logic/rules", name).read_text()
+            source = pathlib.Path("logic/rules", name).read_text(encoding="utf-8")
             self.assertNotIn(
                 "quick_swipe", source,
                 f"{name} still deploys with a swipe, which drops no troops",
             )
 
     def test_perimeter_sweep_drags(self):
-        source = pathlib.Path("logic/rules/perimeter_sweep_rule.py").read_text()
+        source = pathlib.Path("logic/rules/perimeter_sweep_rule.py").read_text(encoding="utf-8")
         self.assertIn("deploy_path", source)
 
     def test_ring_sweep_holds_each_side(self):
         """Ring sweep deploys by holding one spot per side, so it must not
         fall back to the drag primitive."""
-        source = pathlib.Path("logic/rules/ring_sweep_rule.py").read_text()
+        source = pathlib.Path("logic/rules/ring_sweep_rule.py").read_text(encoding="utf-8")
         self.assertNotIn("deploy_path", source)
         self.assertIn("skills.touch.long_press(x, y, hold_ms, cfg", source)
 

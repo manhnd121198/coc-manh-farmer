@@ -229,7 +229,10 @@ class AirAttackRule(AttackRule):
         return None
 
     def _wait_for_engagement(self, ctx: AttackContext) -> None:
+        # Roll lại mỗi trận. Vẫn chờ kể cả khi tắt bấm kỹ năng — spell
+        # thả sau đó cần quân đã giao chiến rồi.
         delay = ctx.skills.hero.ability_delay_seconds(ctx.config)
+        log.info("Waiting %.1fs for the army to engage.", delay)
         end = time.time() + max(0.0, delay)
         while time.time() < end:
             if self._interrupted(ctx):
@@ -239,6 +242,13 @@ class AirAttackRule(AttackRule):
     def _fire_hero_abilities(self, ctx: AttackContext, hero_memory: list) -> None:
         skills = ctx.skills
         cfg = ctx.config
+        if not skills.hero.ability_enabled(cfg):
+            if hero_memory:
+                log.info(
+                    "Hero abilities are off — leaving the %d hero(es) to fire "
+                    "their own when their health runs low.", len(hero_memory),
+                )
+            return
         gap_ms = skills.hero.ability_double_tap_gap_ms(cfg)
         for (_name, card_xy, _drop_xy) in hero_memory:
             if self._interrupted(ctx):

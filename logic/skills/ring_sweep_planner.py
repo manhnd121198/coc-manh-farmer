@@ -301,15 +301,26 @@ class RingSweepPlannerSkill:
         return arcs
 
     @staticmethod
-    def one_point_per_side(
-        centre: Point, ring: Sequence[Point], rng=random,
+    def pick_drops(
+        centre: Point,
+        ring: Sequence[Point],
+        count: int | None = None,
+        rng=random,
     ) -> List[Point]:
-        """One random ring point from each side, in random side order.
+        """Choose ``count`` drop points spread as evenly as the ring allows.
 
-        Both choices are random on purpose: the same base attacked twice
-        should not produce the same four drop spots in the same order.
-        Sides with no surviving ring point are simply absent, so a base
-        that only has grass on two sides still returns two points.
+        Sides are visited round-robin in random order, so the first four
+        points of a four-sided base are one per side — asking for more
+        comes back round and takes a second point from each side, asking
+        for fewer simply leaves the tail sides out. ``None`` means "one
+        per side", the historical behaviour.
+
+        Both the side order and the point within a side are random on
+        purpose: the same base attacked twice should not produce the same
+        drop spots in the same order. Points are never repeated, so a
+        request for more points than the ring holds returns the whole ring
+        rather than the same spot twice — two fingers on one pixel is one
+        finger as far as the game is concerned.
         """
         by_side: dict[str, List[Point]] = {}
         for point in ring:
@@ -317,8 +328,38 @@ class RingSweepPlannerSkill:
                 RingSweepPlannerSkill.side_of(centre, point), [],
             ).append(point)
         sides = sorted(by_side)
+        if not sides:
+            return []
         rng.shuffle(sides)
-        return [rng.choice(by_side[side]) for side in sides]
+
+        pools: dict[str, List[Point]] = {}
+        for side, points in by_side.items():
+            pool = list(points)
+            rng.shuffle(pool)
+            pools[side] = pool
+
+        wanted = len(sides) if count is None else max(1, int(count))
+        drops: List[Point] = []
+        index = 0
+        while len(drops) < wanted:
+            if not any(pools.values()):
+                break                       # the ring is exhausted
+            pool = pools[sides[index % len(sides)]]
+            index += 1
+            if pool:
+                drops.append(pool.pop())
+        return drops
+
+    @staticmethod
+    def one_point_per_side(
+        centre: Point, ring: Sequence[Point], rng=random,
+    ) -> List[Point]:
+        """One random ring point from each side, in random side order.
+
+        Sides with no surviving ring point are simply absent, so a base
+        that only has grass on two sides still returns two points.
+        """
+        return RingSweepPlannerSkill.pick_drops(centre, ring, None, rng)
 
     @staticmethod
     def randomize_route(points: Sequence[Point], rng=random) -> List[Point]:

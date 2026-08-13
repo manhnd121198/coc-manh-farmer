@@ -28,6 +28,7 @@ from core.adb_handler import screencap, tap, tap_raw
 from core.adb_gestures import pan_camera
 from core.logger import BotLogger
 from core.settings import Settings
+from logic.skills.hero_planner import HeroPlannerSkill
 from logic.v2_orchestrator import V2Orchestrator
 from vision.screen_reader import ScreenReader
 from vision.smart_vision_v2 import SmartVisionV2
@@ -47,6 +48,10 @@ class SmartV2Logic:
         self._mode_key = mode_key  # "hv" or "bb"
         self._engine = None
 
+        # Bases walked away from without deploying, since the last one that
+        # actually got attacked. Caps the skip-instead-of-fallback option.
+        self._skipped_in_a_row = 0
+
     def set_engine(self, engine) -> None:
         self._engine = engine
 
@@ -64,7 +69,24 @@ class SmartV2Logic:
     def available_rules(self) -> list[str]:
         return self._orchestrator.available_rules()
 
-    def execute(self, screenshot: np.ndarray) -> None:
+    # ── Kỹ năng hero (dùng chung với các đường cũ) ──────────
+    # Hai đường tap-only — fallback của chính class này và bộ V36 trong
+    # home_village — cũng bấm kỹ năng hero, nên phải đọc thời gian từ
+    # đúng chỗ mà luật V2 đọc. Không thì tắt kỹ năng trong
+    # config/v2_attack_rules.json chỉ ăn ở một số trận.
+    def hero_ability_enabled(self) -> bool:
+        return HeroPlannerSkill.ability_enabled(self._orchestrator.attack_rules())
+
+    def hero_ability_delay(self) -> float:
+        return HeroPlannerSkill.ability_delay_seconds(
+            self._orchestrator.attack_rules(),
+            fallback=float(Settings().get("hero_ability_delay", 3.0)),
+        )
+
+    def execute(self, screenshot: np.ndarray) -> bool:
+        """Run the attack. False means NOTHING was deployed and the caller
+        should walk away from this base — the only way that happens is the
+        "skip instead of falling back" option below."""
         s = Settings()
         mode: Mode = str(s.get(f"v2_mode_{self._mode_key}", "smart"))  # type: ignore[assignment]
         target = str(s.get(f"v2_target_{self._mode_key}", ""))
@@ -77,14 +99,51 @@ class SmartV2Logic:
                 engine=self._engine,
             )
         except Exception as exc:
-            log.error("V2 orchestrator crashed (%s) — falling back to legacy V36.", exc)
+            log.error("V2 orchestrator crashed (%s) — V2 gives up on this base.", exc)
             success = False
 
         if success:
-            return
+            self._skipped_in_a_row = 0
+            return True
+
+        if self._should_skip_instead_of_falling_back():
+            self._skipped_in_a_row += 1
+            log.warning(
+                "V2 gave up and 'skip instead of V36' is on — leaving this "
+                "base without deploying (%d in a row).",
+                self._skipped_in_a_row,
+            )
+            return False
 
         log.warning("V2 orchestrator returned no result — running LEGACY V36 fallback.")
         self._legacy_run(screenshot, mode, target)
+        return True
+
+    def _should_skip_instead_of_falling_back(self) -> bool:
+        """Whether to walk away rather than deploy with the legacy planner.
+
+        The cap is the important half. V2 gives up for reasons that belong
+        to the *bot*, not to the base — a polygon threshold that no longer
+        matches this device makes every single base fail. Without a limit
+        the bot would skip base after base forever, paying the search cost
+        each time and never attacking. After a few in a row it stops being
+        bad luck and starts being a misconfiguration, so we take the ugly
+        attack rather than burn the account's gold on searches.
+        """
+        if not bool(Settings().get("v2_skip_on_fallback", False)):
+            return False
+        cfg = self._orchestrator.attack_rules().get("fallback", {}) or {}
+        limit = max(1, int(cfg.get("max_consecutive_skips", 3)))
+        if self._skipped_in_a_row >= limit:
+            log.warning(
+                "V2 has given up on %d base(s) in a row — that is a setting "
+                "problem, not luck. Attacking with the legacy planner this "
+                "time instead of skipping again.",
+                self._skipped_in_a_row,
+            )
+            self._skipped_in_a_row = 0
+            return False
+        return True
 
     # ── Legacy V36 path (ULTIMATE FALLBACK) ─────────────────────────
     def _legacy_run(self, screenshot: np.ndarray, mode: Mode, target: str) -> None:
@@ -130,14 +189,20 @@ class SmartV2Logic:
 
         if hit_xy is None:
             log.warning("V2 building: '%s' not on screen — searching by panning…", target_key)
-            hit_xy = self._search_by_panning(target_key)
+            hit_xy, panned_ss = self._search_by_panning(target_key)
             if hit_xy is None:
                 log.warning("V2 building: target not found after panning — fallback smart.")
-                _ss = screencap()
-                return self._attack_smart(_ss if _ss is not None else screenshot)
+                return self._attack_smart(
+                    panned_ss if panned_ss is not None else screenshot,
+                )
+            ss = panned_ss if panned_ss is not None else screenshot
+        else:
+            # Found without touching the camera, so this frame still
+            # describes the screen — and it is the frame hit_xy was measured
+            # in. Re-capturing here cost ~600ms and swapped in a picture the
+            # coordinates were never taken from.
+            ss = screenshot
 
-        _ss = screencap()
-        ss = _ss if _ss is not None else screenshot
         safe = self._vision.closest_safe_to(ss, hit_xy)
         if safe is None:
             log.warning("V2 building: no safe spot — fallback smart.")
@@ -158,18 +223,22 @@ class SmartV2Logic:
         targets = self._vision.find_all_targets(screenshot, prefixes)
         if not targets:
             log.warning("V2 storage: no '%s' on screen — searching by panning…", target_prefix)
-            hit = self._search_by_panning(target_prefix)
+            hit, panned_ss = self._search_by_panning(target_prefix)
             if hit is None:
                 log.warning("V2 storage: nothing found — fallback smart.")
-                _ss = screencap()
-                return self._attack_smart(_ss if _ss is not None else screenshot)
+                return self._attack_smart(
+                    panned_ss if panned_ss is not None else screenshot,
+                )
             targets = [(target_prefix, hit[0], hit[1])]
+            # The panning frame is the one those coordinates live in.
+            ss = panned_ss if panned_ss is not None else screenshot
+        else:
+            ss = screenshot
 
-        _ss = screencap()
-        ss = _ss if _ss is not None else screenshot
         # Scout-tap each storage with ONE troop of the first selected type
         # (revealing them is enough — the army then dumps on the nearest).
         scout_troop = self._first_selected_troop()
+        scouted = False
         if scout_troop:
             for (key, tx, ty) in targets:
                 if self._interrupted():
@@ -184,11 +253,18 @@ class SmartV2Logic:
                 tap(tloc[0], tloc[1])
                 time.sleep(0.20)
                 tap(safe[0], safe[1])
+                scouted = True
                 log.info("V2 storage scout: %s @ %s -> drop @ %s", key, (tx, ty), safe)
                 time.sleep(0.4)
 
-        _ss = screencap()
-        ss2 = _ss if _ss is not None else ss
+        # Only the scout taps can have changed the screen. With no troop
+        # selected, or none of them placed, re-capturing buys the same
+        # picture for ~600ms.
+        if scouted:
+            _ss = screencap()
+            ss2 = _ss if _ss is not None else ss
+        else:
+            ss2 = ss
         # Aim the main wave on the storage with the largest visible cluster.
         primary = targets[0]
         safe_main = self._vision.closest_safe_to(ss2, (primary[1], primary[2]))
@@ -224,8 +300,7 @@ class SmartV2Logic:
         storage in those modes). The DEPLOY MECHANICS are unchanged from
         fallback, but its deploy mechanics match the tap-only V2 rules.
         """
-        s = Settings()
-        ability_delay = float(s.get("hero_ability_delay", 3.0))
+        ability_delay = self.hero_ability_delay()
         troop_profiles = self._orchestrator.troop_profiles()
         spell_profiles = self._orchestrator.spell_profiles()
 
@@ -243,8 +318,12 @@ class SmartV2Logic:
         else:
             true_core_x, true_core_y = w // 2, ui_cutoff // 2
 
-        _ss = screencap()
-        fresh = _ss if _ss is not None else screenshot
+        # Nothing has touched the screen since the caller took `screenshot`
+        # — everything above only reads pixels — so the card bar in it is
+        # current and a fresh grab would be the same picture for ~600ms.
+        # If troops ever start logging "card not visible" here, this reuse
+        # is the first thing to suspect.
+        fresh = screenshot
 
         # ── STEP 1: TROOPS (tap-only around cluster) ────────────────
         selected_troops = self._profile.get(self._key("selected_troops"), [])
@@ -290,6 +369,7 @@ class SmartV2Logic:
             time.sleep(0.30)
 
         # ── STEP 3: HERO ABILITY WAIT ────────────────────────────────
+        log.info("V2 fallback: waiting %.1fs for the army to engage.", ability_delay)
         steps = max(1, int(ability_delay / 0.5))
         for _ in range(steps):
             if self._interrupted():
@@ -297,7 +377,16 @@ class SmartV2Logic:
             time.sleep(0.5)
 
         # ── STEP 4: HERO ABILITIES (double-tap memory slots) ────────
-        for _, hx, hy in hero_memory:
+        if not self.hero_ability_enabled():
+            if hero_memory:
+                log.info(
+                    "V2 fallback: hero abilities on auto — leaving the %d "
+                    "hero(es) to fire their own at low health.", len(hero_memory),
+                )
+            hero_memory_iter = []
+        else:
+            hero_memory_iter = hero_memory
+        for _, hx, hy in hero_memory_iter:
             if self._interrupted():
                 return
             tap(hx, hy); time.sleep(0.10)
@@ -404,21 +493,34 @@ class SmartV2Logic:
             return "left" if dx < 0 else "right"
         return "top" if dy < 0 else "bottom"
 
-    def _search_by_panning(self, asset_key: str) -> tuple[int, int] | None:
-        """Pan the camera in 4 directions, screenshot each time, search."""
+    def _search_by_panning(
+        self, asset_key: str,
+    ) -> tuple[tuple[int, int] | None, np.ndarray | None]:
+        """Pan the camera in 4 directions, screenshot each time, search.
+
+        Returns ``(hit, frame)``. The frame comes back with the hit because
+        it is the ONLY one the coordinates are valid in — the camera has
+        moved, so the caller's own screenshot no longer describes this
+        screen. Callers used to discard it and capture again, which cost a
+        second ~600ms grab and, worse, matched an old point against a new
+        frame. On failure the frame is the last one captured (the camera
+        has stopped by then), or None if every grab failed.
+        """
+        last: np.ndarray | None = None
         for direction in ("right", "down", "left", "up"):
             if self._interrupted():
-                return None
+                return None, last
             pan_camera(direction, distance_px=320, duration_ms=600)
             time.sleep(0.4)
             ss = screencap()
             if ss is None:
                 continue
+            last = ss
             for key in self._vision.expand_storage_keys(asset_key) or [asset_key]:
                 hit = self._sr.find_template_by_name(ss, key)
                 if hit:
-                    return hit
-        return None
+                    return hit, ss
+        return None, last
 
     def _interrupted(self) -> bool:
         if self._engine is None:

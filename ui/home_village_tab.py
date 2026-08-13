@@ -117,6 +117,54 @@ class HomeVillageTab(QWidget):
         self._min_dark.setValue(1000)
         loot_grid.addWidget(self._min_dark, 1, 1)
 
+        # ── Random skip ────────────────────────────────────────────────
+        # Đánh mọi làng đủ ngưỡng là thói quen không giống người thật.
+        self._random_skip = QCheckBox("Thỉnh thoảng bỏ qua làng dù đủ tài nguyên")
+        self._random_skip.setToolTip(
+            "Cứ một lúc lại bỏ qua 1-2 làng liền nhau dù loot đủ ngưỡng,\n"
+            "cho nhịp tìm trận đỡ đều đặn.\n"
+            "Chỉ có tác dụng ở trận Thường — trận Xếp hạng vào thẳng\n"
+            "chiến trường, không có màn do thám để bỏ qua.",
+        )
+        loot_grid.addWidget(self._random_skip, 2, 0, 1, 4)
+
+        loot_grid.addWidget(QLabel("Tỉ lệ bỏ qua (%):"), 3, 0)
+        self._random_skip_chance = QSpinBox()
+        self._random_skip_chance.setRange(0, 100)
+        self._random_skip_chance.setSingleStep(5)
+        self._random_skip_chance.setValue(20)
+        self._random_skip_chance.setToolTip(
+            "Xác suất mỗi làng khởi động một đợt bỏ qua. 0 là tắt.",
+        )
+        loot_grid.addWidget(self._random_skip_chance, 3, 1)
+
+        loot_grid.addWidget(QLabel("Mỗi đợt bỏ qua (làng):"), 3, 2)
+        skip_range = QHBoxLayout()
+        self._random_skip_min = QSpinBox()
+        self._random_skip_min.setRange(1, 10)
+        self._random_skip_min.setValue(1)
+        skip_range.addWidget(self._random_skip_min)
+        skip_range.addWidget(QLabel("→"))
+        self._random_skip_max = QSpinBox()
+        self._random_skip_max.setRange(1, 10)
+        self._random_skip_max.setValue(2)
+        skip_range.addWidget(self._random_skip_max)
+        # Giữ min ≤ max để không bao giờ có khoảng vô nghĩa.
+        self._random_skip_min.valueChanged.connect(
+            lambda v: self._random_skip_max.setValue(max(v, self._random_skip_max.value()))
+        )
+        self._random_skip_max.valueChanged.connect(
+            lambda v: self._random_skip_min.setValue(min(v, self._random_skip_min.value()))
+        )
+        loot_grid.addLayout(skip_range, 3, 3)
+
+        for w in (self._random_skip_chance, self._random_skip_min, self._random_skip_max):
+            w.setEnabled(False)
+        self._random_skip.toggled.connect(
+            lambda on: [w.setEnabled(on) for w in
+                        (self._random_skip_chance, self._random_skip_min, self._random_skip_max)]
+        )
+
         loot_group.setLayout(loot_grid)
         layout.addWidget(loot_group)
 
@@ -329,6 +377,10 @@ class HomeVillageTab(QWidget):
             "min_gold": self._min_gold.value(),
             "min_elixir": self._min_elixir.value(),
             "min_dark_elixir": self._min_dark.value(),
+            "hv_random_skip_enabled": self._random_skip.isChecked(),
+            "hv_random_skip_chance": self._random_skip_chance.value(),
+            "hv_random_skip_min": self._random_skip_min.value(),
+            "hv_random_skip_max": self._random_skip_max.value(),
             "auto_retreat_enabled": self._retreat_enabled.isChecked(),
             "retreat_heroes_dead": self._retreat_heroes.isChecked(),
             "retreat_gold": self._retreat_gold.value(),
@@ -349,6 +401,13 @@ class HomeVillageTab(QWidget):
         self._min_gold.setValue(profile.get("min_gold", 200000))
         self._min_elixir.setValue(profile.get("min_elixir", 200000))
         self._min_dark.setValue(profile.get("min_dark_elixir", 1000))
+
+        # Max trước rồi mới tới min: hai spinbox tự kẹp nhau, đặt ngược thứ tự
+        # sẽ kéo max lên theo min cũ.
+        self._random_skip_max.setValue(profile.get("hv_random_skip_max", 2))
+        self._random_skip_min.setValue(profile.get("hv_random_skip_min", 1))
+        self._random_skip_chance.setValue(profile.get("hv_random_skip_chance", 20))
+        self._random_skip.setChecked(profile.get("hv_random_skip_enabled", False))
 
         self._retreat_enabled.setChecked(profile.get("auto_retreat_enabled", False))
         self._retreat_heroes.setChecked(profile.get("retreat_heroes_dead", False))

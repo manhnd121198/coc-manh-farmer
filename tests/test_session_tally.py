@@ -93,7 +93,9 @@ class TallyCallSitesTest(unittest.TestCase):
 
         # loot-skip, loot-OK, and the ranked auto-activation.
         self.assertEqual(3, source.count("self._count_attack()"))
-        self.assertEqual(1, source.count("self._engine.record_skip()"))
+        # A village is passed over for two reasons: its loot is below the
+        # threshold, or the random-skip option decided to walk away from it.
+        self.assertEqual(2, source.count("self._engine.record_skip()"))
 
     def test_builder_base_counts_the_battle_not_each_stage(self):
         source = BB_PATH.read_text(encoding="utf-8")
