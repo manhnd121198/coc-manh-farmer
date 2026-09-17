@@ -154,5 +154,11 @@
   "fallback": {
     "_comment": "Caps the 'skip instead of falling back to V36' switch in Settings. V2 gives up for reasons that belong to the bot rather than to the base -- a polygon threshold that no longer matches this device fails on every base alike -- so an uncapped skip would walk away from base after base, paying the search fee each time and never attacking. After this many skips in a row the bot attacks with the legacy planner instead.",
     "max_consecutive_skips": 3
+  },
+  "bb_surrender": {
+    "_comment": "Farm rule: drop one unit of the first selected troop, then surrender. After each drop tap wait drop_check_ms and look for the surrender button (it only appears once a troop landed); if missing, try the next drop point. Then tap surrender, wait confirm_delay_ms, tap confirm; once the confirm spot is known, wait verify_delay_ms and check the popup is gone.",
+    "drop_check_ms": 300,
+    "confirm_delay_ms": 400,
+    "verify_delay_ms": 600
   }
 }

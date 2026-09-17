@@ -34,6 +34,7 @@ from logic.rules import (
     AirAttackRule,
     AttackContext,
     AttackRule,
+    BBSurrenderRule,
     GroundFunnelRule,
     PerimeterSweepRule,
     RingSweepRule,
@@ -175,18 +176,6 @@ class V2Orchestrator:
             if ss2 is not None:
                 screenshot = ss2
 
-        ui_cutoff = self._sr.get_ui_cutoff(screenshot.shape[0])
-        polygon = self._skills.red_zone.detect(
-            screenshot, ui_cutoff, self._config.attack_rules,
-        )
-        if polygon is None:
-            log.warning(
-                "V2 polygon detection FAILED (HSV + inversion both rejected) "
-                "— V2 gives up on this base.",
-            )
-            return False
-        base_centroid = self._skills.red_zone.centroid(polygon)
-
         rule = self._select_rule(
             v2_mode=v2_mode,
             manual_rule=manual_rule,
@@ -198,6 +187,21 @@ class V2Orchestrator:
         if rule is None:
             log.warning("V2 no rule matched — V2 gives up on this base.")
             return False
+
+        ui_cutoff = self._sr.get_ui_cutoff(screenshot.shape[0])
+        polygon = None
+        base_centroid = None
+        if rule.needs_polygon:
+            polygon = self._skills.red_zone.detect(
+                screenshot, ui_cutoff, self._config.attack_rules,
+            )
+            if polygon is None:
+                log.warning(
+                    "V2 polygon detection FAILED (HSV + inversion both rejected) "
+                    "— V2 gives up on this base.",
+                )
+                return False
+            base_centroid = self._skills.red_zone.centroid(polygon)
 
         ctx = AttackContext(
             screenshot=screenshot,
@@ -376,6 +380,7 @@ class V2Orchestrator:
             GroundFunnelRule(),
             PerimeterSweepRule(),
             RingSweepRule(),
+            BBSurrenderRule(),
             SmartDefaultRule(),
         ]
         rules.sort(key=lambda r: r.priority)

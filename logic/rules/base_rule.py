@@ -82,6 +82,7 @@ class AttackRule(ABC):
 
     name: str = "base_rule"
     priority: int = 100
+    needs_polygon: bool = True
 
     @abstractmethod
     def matches(self, profile: dict, screenshot: np.ndarray) -> bool: ...

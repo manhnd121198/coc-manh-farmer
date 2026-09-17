@@ -270,8 +270,8 @@
     "category": "troops",
     "label": "Witch Bb",
     "file": "assets\\templates\\troops\\witch_bb.png",
-    "width": 102,
-    "height": 106,
+    "width": 97,
+    "height": 58,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -336,8 +336,8 @@
     "category": "ui_elements",
     "label": "Surrender Button",
     "file": "assets\\templates\\ui_elements\\surrender_button.png",
-    "width": 178,
-    "height": 54,
+    "width": 166,
+    "height": 50,
     "screen_w": 1350,
     "screen_h": 1080
   },

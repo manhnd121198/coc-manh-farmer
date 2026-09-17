@@ -19,7 +19,7 @@ from pathlib import Path
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox,
-    QComboBox, QDoubleSpinBox, QFormLayout, QPushButton,
+    QComboBox, QDoubleSpinBox, QSpinBox, QFormLayout, QPushButton,
     QFrame, QSizePolicy,
 )
 
@@ -40,6 +40,7 @@ _RULE_OPTIONS = [
     ("Bộ binh mở phễu  — 2 mũi mở đường rồi thả đợt chính",  "ground_funnel"),
     ("Cướp tài nguyên  — dò từng kho rồi thả",               "resource_raid"),
     ("Bắn tỉa TH  — hành lang an toàn gần công trình đích",  "th_snipe"),
+    ("Farm tiên dược BB  — thả 1 lính đầu tiên rồi đầu hàng", "bb_surrender"),
 ]
 
 
@@ -105,6 +106,19 @@ class SmartV2Panel(QGroupBox):
         )
         self._combo_rule.currentIndexChanged.connect(self._emit)
         form.addRow("Luật V2:", self._combo_rule)
+
+        self._spin_max_battles = QSpinBox()
+        self._spin_max_battles.setRange(0, 100000)
+        self._spin_max_battles.setSpecialValueText("Không giới hạn")
+        self._spin_max_battles.setToolTip(
+            "Luật 'Farm tiên dược BB': đầu hàng đủ số trận này thì bot\n"
+            "tự dừng. 0 = chạy mãi. Đếm lại từ đầu mỗi lần bấm chạy.",
+        )
+        self._spin_max_battles.valueChanged.connect(self._emit)
+        if self._mode_key == "bb":
+            form.addRow("Số trận đầu hàng / lượt:", self._spin_max_battles)
+        else:
+            self._spin_max_battles.hide()
 
         zoom_row = QHBoxLayout()
         zoom_row.addWidget(QLabel("Chờ vật trang trí mờ đi (giây):"))
@@ -178,7 +192,7 @@ class SmartV2Panel(QGroupBox):
 
     def _load(self) -> None:
         for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_wait):
+                  self._combo_rule, self._spin_wait, self._spin_max_battles):
             w.blockSignals(True)
 
         self._chk_enable.setChecked(bool(self._s.get(self._key("v2_enabled"), False)))
@@ -195,9 +209,10 @@ class SmartV2Panel(QGroupBox):
         self._combo_rule.setCurrentIndex(max(0, ridx))
 
         self._spin_wait.setValue(float(self._s.get("v2_decoration_wait", 5.0)))
+        self._spin_max_battles.setValue(int(self._s.get("bb_surrender_max_battles", 0) or 0))
 
         for w in (self._chk_enable, self._combo_mode, self._combo_target,
-                  self._combo_rule, self._spin_wait):
+                  self._combo_rule, self._spin_wait, self._spin_max_battles):
             w.blockSignals(False)
 
         self._on_mode_changed()
@@ -208,6 +223,8 @@ class SmartV2Panel(QGroupBox):
         self._s.set(self._key("v2_target"),   self._combo_target.currentData() or "")
         self._s.set(self._key("v2_rule"),     self._combo_rule.currentData() or "auto")
         self._s.set("v2_decoration_wait",     self._spin_wait.value())
+        if self._mode_key == "bb":
+            self._s.set("bb_surrender_max_battles", self._spin_max_battles.value())
         self._s.save()
 
     def _on_mode_changed(self) -> None:
