@@ -46,6 +46,14 @@ BUILDING_CATEGORIES = {"buildings", "builder_base"}
 
 FALLBACK_BATTLEFIELD_RATIO = 0.60
 
+# How far below a threshold the half-resolution screening pass may score
+# before a UI template is declared absent without a full-resolution check.
+# ~2x the worst drift measured across the bundled UI set (+0.078).
+COARSE_MARGIN = 0.15
+# Slack around the coarse peak when re-scoring at full resolution. True
+# hits landed within 2px of the doubled coarse location.
+COARSE_PAD = 10
+
 # Deployment line params
 BASE_OFFSET = 80       
 LINE_SPACING = 35      
@@ -88,6 +96,23 @@ class ScreenReader:
     # for a given device, so reusing it keeps later frames to one or two
     # matchTemplate passes instead of re-walking the whole ladder.
     _ui_scale_hint: float | None = None
+
+    # Which village the bot was told to play. ``detect_state`` asks nine
+    # ``bb_*`` templates that only a Builder Base can answer; on a home
+    # village they are nine guaranteed misses at ~137ms each, so roughly
+    # 1.2s of every tick was spent proving the obvious.
+    _village_mode: str = "home_village"
+
+    def set_village_mode(self, mode: str) -> None:
+        """Tell the reader which village to expect.
+
+        The cost is a real trade, not a free win: in ``home_village`` mode
+        a Builder Base screen no longer resolves to a BB state, it resolves
+        to UNKNOWN. That is loud rather than silent — the stuck timer fires
+        and Interactive Assist asks — and the bot had no business being
+        there anyway.
+        """
+        self._village_mode = mode or "home_village"
 
     @staticmethod
     def get_ui_cutoff(screen_height: int) -> int:
@@ -310,6 +335,57 @@ class ScreenReader:
             log.debug("OpenCV raw_match exception: %s", exc)
             return -1.0, (0, 0), (0, 0)
 
+    @staticmethod
+    def _ui_match_once(
+        gray_ss: np.ndarray, half_ss: np.ndarray, tmpl: np.ndarray,
+        threshold: float,
+    ) -> tuple[float, tuple[int, int], tuple[int, int]]:
+        """One UI match, screened by a half-resolution pass first.
+
+        Proving a button is ABSENT is what costs: a miss walks every scale
+        at full resolution, and ``detect_state`` is mostly misses. Measured
+        on this device a full-frame ``matchTemplate`` is 23.6ms against
+        5.6ms at half scale.
+
+        The screen is sound because the drift only goes one way. Across all
+        18 UI templates the half-scale peak scored between +0.000 and +0.078
+        ABOVE the full-scale one — never below. So a coarse score under
+        ``threshold - COARSE_MARGIN`` proves the full-resolution score
+        cannot clear the bar, and the expensive pass can be skipped.
+        Anything that survives is re-scored at full resolution, so every
+        threshold in this repo keeps exactly the meaning it had.
+
+        ``COARSE_MARGIN`` is ~2x the worst drift measured. Raise it if a
+        button ever stops being recognised; that is the knob, not the
+        per-template thresholds.
+        """
+        th, tw = tmpl.shape[:2]
+        full = lambda: ScreenReader._raw_match(gray_ss, tmpl, None, False)  # noqa: E731
+
+        hh, hw = th // 2, tw // 2
+        if (hh < 4 or hw < 4
+                or hh > half_ss.shape[0] or hw > half_ss.shape[1]):
+            # Too small to survive halving — screening would be noise.
+            return full()
+
+        small = cv2.resize(tmpl, (hw, hh), interpolation=cv2.INTER_AREA)
+        cval, cloc, _ = ScreenReader._raw_match(half_ss, small, None, False)
+        if cval < threshold - COARSE_MARGIN:
+            # Certain miss. Report the coarse score: it is only ever an
+            # over-estimate, and it is already under the bar.
+            return cval, (cloc[0] * 2, cloc[1] * 2), (th, tw)
+
+        x0 = max(0, cloc[0] * 2 - COARSE_PAD)
+        y0 = max(0, cloc[1] * 2 - COARSE_PAD)
+        x1 = min(gray_ss.shape[1], x0 + tw + 2 * COARSE_PAD)
+        y1 = min(gray_ss.shape[0], y0 + th + 2 * COARSE_PAD)
+        window = gray_ss[y0:y1, x0:x1]
+        if window.shape[0] < th or window.shape[1] < tw:
+            return full()
+
+        val, loc, dims = ScreenReader._raw_match(window, tmpl, None, False)
+        return val, (loc[0] + x0, loc[1] + y0), dims
+
     def _match_ui(
         self, screenshot: np.ndarray, tmpl_bgr: np.ndarray, threshold: float,
         src_width: int | None = None,
@@ -360,6 +436,10 @@ class ScreenReader:
             best_dims = (gray_t.shape[0], gray_t.shape[1])
             best_scale = 1.0
 
+            half_ss = cv2.resize(
+                gray_ss, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA,
+            )
+
             for scale in ui_scales:
                 if abs(scale - 1.0) < 0.02:
                     scaled_t = gray_t
@@ -371,7 +451,9 @@ class ScreenReader:
                     interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
                     scaled_t = cv2.resize(gray_t, (nw, nh), interpolation=interp)
 
-                val, loc, dims = self._raw_match(gray_ss, scaled_t, None, False)
+                val, loc, dims = self._ui_match_once(
+                    gray_ss, half_ss, scaled_t, threshold,
+                )
                 if val > best_val:
                     best_val = val
                     best_loc = loc
@@ -582,19 +664,24 @@ class ScreenReader:
         if f(screenshot, "next_button"):       return GameState.OPPONENT_FOUND
         
         # ── BUILDER BASE SPECIFIC CHECKS ──
-        if f(screenshot, "bb_find_match", 0.88):     return GameState.BUILDER_BASE_HOME
-        if f(screenshot, "bb_attack_confirm", 0.88): return GameState.BUILDER_BASE_HOME
-        if f(screenshot, "bb_return_home", 0.80):    return GameState.BATTLE_ENDED
-        if f(screenshot, "bb_battle_result", 0.80):  return GameState.BATTLE_ENDED
+        # Only asked when the bot was actually told to play the Builder
+        # Base. See set_village_mode for what this costs.
+        builder = self._village_mode == "builder_base"
 
-        # Every other in-battle marker below is shared with the Home
-        # Village: both villages draw the same red surrender button, the
-        # same "battle ends in" timer and the same damage panel, in the
-        # same places. The defender/attacker header is the one thing only
-        # a Builder Base fight has, so it must be asked FIRST — otherwise
-        # a BB battle answers IN_BATTLE and the home-village logic starts
-        # planning an attack on a base it cannot see.
-        if f(screenshot, "bb_side_label", 0.80):     return GameState.BB_BATTLE
+        if builder:
+            if f(screenshot, "bb_find_match", 0.88):     return GameState.BUILDER_BASE_HOME
+            if f(screenshot, "bb_attack_confirm", 0.88): return GameState.BUILDER_BASE_HOME
+            if f(screenshot, "bb_return_home", 0.80):    return GameState.BATTLE_ENDED
+            if f(screenshot, "bb_battle_result", 0.80):  return GameState.BATTLE_ENDED
+
+            # Every other in-battle marker below is shared with the Home
+            # Village: both villages draw the same red surrender button, the
+            # same "battle ends in" timer and the same damage panel, in the
+            # same places. The defender/attacker header is the one thing only
+            # a Builder Base fight has, so it must be asked FIRST — otherwise
+            # a BB battle answers IN_BATTLE and the home-village logic starts
+            # planning an attack on a base it cannot see.
+            if f(screenshot, "bb_side_label", 0.80):     return GameState.BB_BATTLE
 
         # The "Available Loot" panel is on screen while scouting and while
         # attacking. It must be judged at the normal UI confidence: at 0.35
@@ -615,18 +702,19 @@ class ScreenReader:
         if f(screenshot, "end_battle_button", 0.80): return GameState.IN_BATTLE
         if f(screenshot, "timer_top_start", 0.75):   return GameState.IN_BATTLE
         
-        if f(screenshot, "bb_battle_hud", 0.70):     return GameState.BB_BATTLE
-        
-        h, w = screenshot.shape[:2]
-        top_roi = screenshot[0:int(h * 0.25), int(w * 0.25):int(w * 0.75)]
-        cached_prep = self._get_cached_template("bb_prep_text")
-        cached_act = self._get_cached_template("bb_active_text")
-        
-        if cached_prep and self._match_ui(top_roi, cached_prep[0], 0.70):
-            return GameState.BB_BATTLE
-        if cached_act and self._match_ui(top_roi, cached_act[0], 0.70):
-            return GameState.BB_BATTLE
-        
+        if builder:
+            if f(screenshot, "bb_battle_hud", 0.70): return GameState.BB_BATTLE
+
+            h, w = screenshot.shape[:2]
+            top_roi = screenshot[0:int(h * 0.25), int(w * 0.25):int(w * 0.75)]
+            cached_prep = self._get_cached_template("bb_prep_text")
+            cached_act = self._get_cached_template("bb_active_text")
+
+            if cached_prep and self._match_ui(top_roi, cached_prep[0], 0.70):
+                return GameState.BB_BATTLE
+            if cached_act and self._match_ui(top_roi, cached_act[0], 0.70):
+                return GameState.BB_BATTLE
+
         # ── HOME VILLAGE STATE PRIORITY ────────────────────────────────
         confirmations = self.scan_for_confirmations(screenshot)
         if confirmations: return GameState.CONFIRMING

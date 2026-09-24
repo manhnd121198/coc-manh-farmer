@@ -22,6 +22,7 @@ from vision.screen_reader import ScreenReader
 from vision.ocr_reader import OCRReader
 from logic import fast_entry
 from logic.smart_v2_logic import SmartV2Logic
+from logic.wall_upgrader import WallUpgrader
 
 log = BotLogger.get("home_village")
 
@@ -55,6 +56,11 @@ class HomeVillageLogic:
         # read it. Stops the random skip from piling onto that.
         self._forced_skip_last: bool = False
 
+        # Whether the last frame was already the home village. The storage
+        # read costs ~1.8s of OCR, so it fires on the way IN and not on
+        # every home tick — otherwise it would dominate the search loop.
+        self._was_home: bool = False
+
         # Smart Vision V2 — opt-in per-village. Constructed eagerly so the
         # mode flag can flip mid-session without a restart.
         self._v2 = SmartV2Logic(self._profile, self._sr, self._ocr, mode_key="hv")
@@ -77,7 +83,77 @@ class HomeVillageLogic:
         if self._engine is None: return False
         return not self._engine._running or self._engine._paused
 
+    def _log_own_storage(self, screenshot: np.ndarray) -> None:
+        """Report what is in YOUR storages, once per return to the village.
+
+        This is the top-RIGHT bar. The loot OCR reads the top-LEFT panel,
+        which during an attack shows the *opponent's* remaining loot — so
+        the two must never be confused, and only this one answers "how
+        much do I have".
+        """
+        try:
+            res = self._ocr.read_own_storage(screenshot)
+        except Exception as exc:
+            log.warning("Could not read own storage: %s", exc)
+            return
+        log.info(
+            "%s💰 Kho của bạn: Vàng %s%d%s | Elixir %s%d%s | Elixir đen %s%d%s",
+            C_GREEN, C_GOLD, res["gold"], C_RESET,
+            C_ELIXIR, res["elixir"], C_RESET,
+            C_DARK, res["dark_elixir"], C_RESET,
+        )
+        self._consider_wall_upgrade(res)
+
+    def _wall_currency(self, storage: dict) -> str | None:
+        """Which resource, if any, has enough spare to spend on walls.
+
+        A zero reads as "the OCR failed", not "the storage is empty": an
+        actually-empty storage would not clear any sane threshold anyway,
+        and treating a failed read as 0 keeps a bad frame from spending.
+
+        Gold goes first because elixir also buys troops, so gold is the
+        one more likely to be sitting idle at the cap.
+        """
+        s = Settings()
+        if not bool(s.get("wall_upgrade_enabled", False)):
+            return None
+
+        gold = int(storage.get("gold", 0))
+        elixir = int(storage.get("elixir", 0))
+        if gold <= 0 and elixir <= 0:
+            log.warning("Tự nâng tường: không đọc được kho — bỏ qua lượt này.")
+            return None
+
+        if gold > 0 and gold >= int(s.get("wall_upgrade_min_gold", 12_000_000)):
+            return "gold"
+        if (bool(s.get("wall_upgrade_use_elixir", True)) and elixir > 0
+                and elixir >= int(s.get("wall_upgrade_min_elixir", 12_000_000))):
+            return "elixir"
+        return None
+
+    def _consider_wall_upgrade(self, storage: dict) -> None:
+        currency = self._wall_currency(storage)
+        if currency is None:
+            return
+        segments = max(1, int(Settings().get("wall_upgrade_segments", 5)))
+        label = "vàng" if currency == "gold" else "elixir"
+        log.info(
+            "%s🧱 Nâng tường bằng %s%s — %d đoạn.",
+            C_GREEN, label, C_RESET, segments,
+        )
+        try:
+            WallUpgrader(self._sr, self._ocr).run(segments, currency)
+        except Exception as exc:
+            log.error("Nâng tường lỗi: %s", exc)
+
     def handle(self, screenshot: np.ndarray, state: GameState):
+        if state == GameState.HOME:
+            if not self._was_home:
+                self._log_own_storage(screenshot)
+            self._was_home = True
+        else:
+            self._was_home = False
+
         if state == GameState.HOME:
             self._handle_home(screenshot)
         elif state == GameState.OPPONENT_FOUND:

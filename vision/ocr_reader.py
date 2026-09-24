@@ -38,6 +38,24 @@ TIMER_X_END   = 0.60
 
 LOOT_LEFT_CROP = 0.35
 
+# Your OWN storage bars, top right of the HOME VILLAGE.
+#
+# Home village only. The same three bars are drawn on the scouting screen
+# too, but spaced quite differently: measured on a 1350x1080 LDPlayer the
+# rows sit at y 34..62, 116..140, 194..218 at home (~80px apart) against
+# y 28..60, 77..110, 127..157 while scouting (~50px). One box cannot serve
+# both — a box tuned for the scouting screen splits its thirds across the
+# gaps at home and reports numbers assembled from the wrong rows.
+#
+# Verified at home against 8 929 845 / 6 534 575 / 200 000. The box ends
+# above the gem counter at y~270 and short of the coin/drop icons on the
+# right, and starts left of the widest number seen so far so an eight
+# figure total is not clipped.
+STORAGE_Y_START = 0.020
+STORAGE_Y_END   = 0.215
+STORAGE_X_START = 0.811
+STORAGE_X_END   = 0.944
+
 _reader = None
 _gpu_supported: bool | None = None
 
@@ -207,6 +225,82 @@ class OCRReader:
         self._last_loot = result
         self._last_loot_time = now
         return result
+
+    # ═══════════════════════════════════════════════════════════════════
+    #  OWN STORAGE READING
+    # ═══════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _storage_digits(strip: np.ndarray) -> np.ndarray:
+        """Isolate the white numerals printed on a coloured storage bar.
+
+        ``_preprocess`` uses Otsu, which works on the loot panel because
+        that sits on dark terrain. It fails here: the numbers ride on a
+        gold, magenta or purple bar whose own brightness straddles the
+        Otsu split, and the digits come back broken. Measured on a live
+        1350x1080 frame Otsu read 12 948 175 as 1 294 815.
+
+        The numerals are the only pure-white thing in the bar, so pick
+        them by saturation instead of brightness alone. The border matters
+        too — without margin EasyOCR clipped the leading digits.
+        """
+        hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
+        mask = ((hsv[:, :, 1] <= 60) & (hsv[:, :, 2] >= 170))
+        img = (mask.astype(np.uint8) * 255)
+        img = cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+        img = cv2.bitwise_not(img)          # dark glyphs on white
+        return cv2.copyMakeBorder(img, 40, 40, 40, 40,
+                                  cv2.BORDER_CONSTANT, value=255)
+
+    def read_own_storage(self, screenshot: np.ndarray) -> dict[str, int]:
+        """Gold / elixir / dark elixir in YOUR OWN storages (top right).
+
+        Pass a HOME VILLAGE frame. The bars are laid out differently on
+        the scouting screen and this will read rubbish there — see the
+        STORAGE_* constants.
+
+        Not to be confused with ``read_loot``, which reads the top-LEFT
+        panel — that is the *opponent's* available loot and is only on
+        screen while scouting or attacking.
+
+        Returns zeros for anything it could not read; the caller decides
+        whether a zero means empty or means the read failed.
+        """
+        y1, y2, x1, x2 = STORAGE_Y_START, STORAGE_Y_END, STORAGE_X_START, STORAGE_X_END
+        crop = self._proportional_crop(screenshot, y1, y2, x1, x2)
+        if crop.size == 0:
+            return {"gold": 0, "elixir": 0, "dark_elixir": 0}
+
+        h = crop.shape[0]
+        strip_h = h // 3
+        strips = {
+            "gold":        crop[0:strip_h, :],
+            "elixir":      crop[strip_h:2 * strip_h, :],
+            "dark_elixir": crop[2 * strip_h:, :],
+        }
+
+        out: dict[str, int] = {}
+        reader = _get_reader()
+        for resource, strip in strips.items():
+            if strip.size == 0 or reader is None:
+                out[resource] = 0
+                continue
+            try:
+                # allowlist is what makes this reliable. Unconstrained,
+                # EasyOCR swallowed repeated digits — 11 161 530 came back
+                # as 1 161 530 and 200 000 as 20 000.
+                text = " ".join(reader.readtext(
+                    self._storage_digits(strip), detail=0, paragraph=True,
+                    allowlist="0123456789 ",
+                ))
+            except Exception as exc:
+                log.error("Storage OCR error (%s): %s", resource, exc)
+                out[resource] = 0
+                continue
+            digits = re.sub(r"\D", "", text)
+            out[resource] = int(digits) if digits else 0
+
+        return out
 
     # ═══════════════════════════════════════════════════════════════════
     #  TIMER READING

@@ -330,6 +330,67 @@ class SettingsTab(QWidget):
 
         root.addWidget(dep_grp)
 
+        # ── Wall upgrading ──────────────────────────────────────────────
+        wall_grp = QGroupBox("Tự nâng tường")
+        wall_lay = QVBoxLayout(wall_grp)
+
+        self._chk_wall = QCheckBox(
+            "Nâng tường khi vàng trong kho vượt ngưỡng",
+        )
+        self._chk_wall.setToolTip(
+            "Sau mỗi lần về làng, bot đọc thanh kho ở góc trên phải.\n"
+            "Vàng vượt ngưỡng dưới đây thì đem phần dư đi nâng tường.\n\n"
+            "Ngưỡng đọc từ KHO CỦA BẠN, không phải chiến lợi phẩm của\n"
+            "đối thủ. Đặt đủ cao để còn vàng chạy tiếp chu kỳ đánh.",
+        )
+        self._chk_wall.stateChanged.connect(self._on_value_changed)
+        wall_lay.addWidget(self._chk_wall)
+
+        w_row = QHBoxLayout()
+        w_row.addWidget(QLabel("Vàng tối thiểu:"))
+        self._spin_wall_gold = QSpinBox()
+        self._spin_wall_gold.setRange(0, 20_000_000)
+        self._spin_wall_gold.setSingleStep(100_000)
+        self._spin_wall_gold.setGroupSeparatorShown(True)
+        self._spin_wall_gold.setToolTip(
+            "Dưới mức này thì bot không đụng vào tường.",
+        )
+        self._spin_wall_gold.valueChanged.connect(self._on_value_changed)
+        w_row.addWidget(self._spin_wall_gold)
+
+        w_row.addWidget(QLabel("Số đoạn mỗi lần:"))
+        self._spin_wall_segments = QSpinBox()
+        self._spin_wall_segments.setRange(1, 25)
+        self._spin_wall_segments.setToolTip(
+            "Bot chọn từng đoạn một rồi nâng cả nhóm trong một lần bấm.\n"
+            "Giá mỗi đoạn tuỳ cấp tường, nên bot không tính theo tiền —\n"
+            "nó đọc giá ngay trên nút và bỏ qua nếu giá hiện màu đỏ.",
+        )
+        self._spin_wall_segments.valueChanged.connect(self._on_value_changed)
+        w_row.addWidget(self._spin_wall_segments)
+        w_row.addStretch()
+        wall_lay.addLayout(w_row)
+
+        e_row = QHBoxLayout()
+        self._chk_wall_elixir = QCheckBox("Dùng cả elixir khi vàng chưa đủ")
+        self._chk_wall_elixir.setToolTip(
+            "Tường nâng được bằng vàng hoặc elixir, cùng giá.\n"
+            "Bot ưu tiên vàng vì elixir còn dùng để nuôi quân.",
+        )
+        self._chk_wall_elixir.stateChanged.connect(self._on_value_changed)
+        e_row.addWidget(self._chk_wall_elixir)
+        e_row.addWidget(QLabel("Elixir tối thiểu:"))
+        self._spin_wall_elixir = QSpinBox()
+        self._spin_wall_elixir.setRange(0, 20_000_000)
+        self._spin_wall_elixir.setSingleStep(100_000)
+        self._spin_wall_elixir.setGroupSeparatorShown(True)
+        self._spin_wall_elixir.valueChanged.connect(self._on_value_changed)
+        e_row.addWidget(self._spin_wall_elixir)
+        e_row.addStretch()
+        wall_lay.addLayout(e_row)
+
+        root.addWidget(wall_grp)
+
         # ── Game Presence ───────────────────────────────────────────────
         game_grp = QGroupBox("Theo dõi game (kiểm tra game có đang mở)")
         game_lay = QVBoxLayout(game_grp)
@@ -559,6 +620,11 @@ class SettingsTab(QWidget):
         self._chk_fast_entry.setChecked(bool(s.get("hv_fast_entry", False)))
         self._chk_multi_touch.setChecked(bool(s.get("multi_touch_enabled", False)))
         self._chk_sweep_up.setChecked(bool(s.get("sweep_up_enabled", False)))
+        self._chk_wall.setChecked(bool(s.get("wall_upgrade_enabled", False)))
+        self._spin_wall_gold.setValue(int(s.get("wall_upgrade_min_gold", 12_000_000)))
+        self._spin_wall_elixir.setValue(int(s.get("wall_upgrade_min_elixir", 12_000_000)))
+        self._chk_wall_elixir.setChecked(bool(s.get("wall_upgrade_use_elixir", True)))
+        self._spin_wall_segments.setValue(int(s.get("wall_upgrade_segments", 5)))
         self._chk_skip_on_fallback.setChecked(bool(s.get("v2_skip_on_fallback", False)))
         self._spin_troop_thr.setValue(s.get("vision_troop_threshold"))
         self._spin_ui_thr.setValue(s.get("vision_ui_threshold"))
@@ -603,6 +669,11 @@ class SettingsTab(QWidget):
         s.set("hv_fast_entry", self._chk_fast_entry.isChecked())
         s.set("multi_touch_enabled", self._chk_multi_touch.isChecked())
         s.set("sweep_up_enabled", self._chk_sweep_up.isChecked())
+        s.set("wall_upgrade_enabled", self._chk_wall.isChecked())
+        s.set("wall_upgrade_min_gold", self._spin_wall_gold.value())
+        s.set("wall_upgrade_min_elixir", self._spin_wall_elixir.value())
+        s.set("wall_upgrade_use_elixir", self._chk_wall_elixir.isChecked())
+        s.set("wall_upgrade_segments", self._spin_wall_segments.value())
         s.set("v2_skip_on_fallback", self._chk_skip_on_fallback.isChecked())
         s.set("vision_troop_threshold", self._spin_troop_thr.value())
         s.set("vision_ui_threshold", self._spin_ui_thr.value())
@@ -639,6 +710,21 @@ class SettingsTab(QWidget):
             self._update_preset_desc(key)
             self.settings_changed.emit()
             self._status_lbl.setText(f"✓ Preset: {key.upper()}")
+
+    def showEvent(self, event) -> None:
+        """Re-read the settings each time this tab comes to the front.
+
+        The bot writes to Settings on its own — it switches "Tự nâng
+        tường" off once it sees the walls are maxed. Without this the tab
+        would keep showing the stale tick, and because every widget saves
+        on change, touching any OTHER setting would write that tick back
+        and undo the bot's decision.
+
+        Safe to reload unconditionally: nothing here is ever pending, each
+        widget already saved itself the moment it changed.
+        """
+        super().showEvent(event)
+        self._load_values()
 
     def _on_value_changed(self, *_) -> None:
         self._save_values()
@@ -828,6 +914,8 @@ class SettingsTab(QWidget):
             self._chk_skip_loot, self._chk_skip_timer,
             self._chk_fast_entry, self._chk_multi_touch,
             self._chk_sweep_up, self._chk_skip_on_fallback,
+            self._chk_wall, self._spin_wall_gold, self._spin_wall_elixir,
+            self._chk_wall_elixir, self._spin_wall_segments,
             self._spin_troop_thr, self._spin_ui_thr,
             self._spin_building_thr, self._spin_ocr_interval,
             self._spin_hero_delay, self._spin_jitter,

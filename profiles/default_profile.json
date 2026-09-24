@@ -3,7 +3,7 @@
   "min_elixir": 0,
   "min_dark_elixir": 0,
   "hv_random_skip_enabled": true,
-  "hv_random_skip_chance": 20,
+  "hv_random_skip_chance": 0,
   "hv_random_skip_min": 1,
   "hv_random_skip_max": 2,
   "auto_retreat_enabled": false,
@@ -18,12 +18,16 @@
   "attack_strategy": "smart_target",
   "macro_file": "recordings\\hv_attack_macro.json",
   "selected_troops": [
-    "baba",
-    "valkyrie",
     "dragon"
   ],
-  "selected_heroes": [],
-  "selected_spells": [],
+  "selected_heroes": [
+    "archer_queen",
+    "barbarian_king",
+    "grand_warden"
+  ],
+  "selected_spells": [
+    "rage_spell"
+  ],
   "bb_attack_mode": "t\u1eadp luy\u1ec7n",
   "bb_attack_strategy": "smart_target",
   "bb_macro_file": "",

@@ -99,6 +99,7 @@ class BotEngine(QThread):
 
         self._sm = StateMachine()
         self._screen_reader = ScreenReader()
+        self._screen_reader.set_village_mode(mode)
         self._ocr = OCRReader()
         self._home_logic = HomeVillageLogic(self._profile, self._sm, self._screen_reader, self._ocr)
         self._bb_logic = BuilderBaseLogic(self._profile, self._sm, self._screen_reader, self._ocr)
@@ -487,6 +488,10 @@ class BotEngine(QThread):
 
     def set_mode(self, mode: str) -> None:
         self._mode = mode
+        # detect_state skips the Builder Base templates in home mode, so it
+        # has to hear about the switch or the bot goes blind in the village
+        # it just moved to.
+        self._screen_reader.set_village_mode(mode)
 
     def update_profile(self, profile: dict) -> None:
         self._profile = profile

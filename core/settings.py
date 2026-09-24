@@ -111,6 +111,15 @@ _DEFAULTS: dict = {
     # colour, and those thresholds need one look at the log per device.
     "sweep_up_enabled": False,
 
+    # Spend surplus gold on walls when the storages are full enough.
+    # The floor is what keeps upgrading from eating the gold an attack
+    # cycle needs; it is read from YOUR storage bar, not from loot.
+    "wall_upgrade_enabled": False,
+    "wall_upgrade_min_gold": 12_000_000,
+    "wall_upgrade_min_elixir": 12_000_000,
+    "wall_upgrade_use_elixir": True,
+    "wall_upgrade_segments": 5,
+
     # Vision toggles
     "skip_loot_ocr": False,
     "skip_timer_ocr": False,

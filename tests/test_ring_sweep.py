@@ -407,7 +407,7 @@ class RingSweepHoldRoutingTest(unittest.TestCase):
 
     DROPS = [(100, 100), (200, 200), (300, 300), (400, 400)]
 
-    def _run(self, available, multi_ok=True):
+    def _run(self, available, multi_ok=True, switch=True):
         from unittest import mock
         from types import SimpleNamespace
         from logic.rules import ring_sweep_rule
@@ -417,13 +417,24 @@ class RingSweepHoldRoutingTest(unittest.TestCase):
             config={}, skills=SimpleNamespace(touch=touch), engine=None,
         )
         rule = ring_sweep_rule.RingSweepRule()
+        # _hold_sides asks enabled() separately from available() so it can
+        # tell "switch off" from "no root" in the log. Without patching it
+        # these tests read the real Settings file, and on any machine where
+        # the switch is off they assert against a branch that never runs.
         with mock.patch.object(rule, "_interrupted", return_value=False), \
+             mock.patch.object(ring_sweep_rule.multi_touch, "enabled",
+                               return_value=switch), \
              mock.patch.object(ring_sweep_rule.multi_touch, "available",
                                return_value=available), \
              mock.patch.object(ring_sweep_rule.multi_touch, "hold_all",
                                return_value=multi_ok) as hold_all:
             rule._hold_sides(ctx, {}, "baba", self.DROPS)
         return hold_all, touch
+
+    def test_the_switch_being_off_falls_back_to_one_finger(self):
+        hold_all, touch = self._run(available=True, switch=False)
+        hold_all.assert_not_called()
+        self.assertEqual(len(self.DROPS), touch.long_press.call_count)
 
     def test_multi_touch_presses_every_side_in_one_gesture(self):
         hold_all, touch = self._run(available=True)

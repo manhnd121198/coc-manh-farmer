@@ -141,6 +141,32 @@ class CoordinateMappingTest(unittest.TestCase):
         cfg = multi_touch._cfg(_cfg(invert_x=True, invert_y=True))
         self.assertEqual((4095, 4095), multi_touch.to_raw(0, 0, cfg, SCREEN))
 
+    def test_a_rectangular_grid_scales_each_axis_by_its_own_max(self):
+        """LDPlayer reports X 0..1349 and Y 0..1079 — the pixel grid itself.
+
+        With one shared ceiling the centre of a 1350x1080 screen went to
+        raw (675, 675), which the driver reads as 62.5% down instead of
+        50%: 136px low. Anything below y~863 clamped onto the bottom edge,
+        i.e. into the troop card bar.
+        """
+        cfg = multi_touch._cfg(_cfg(raw_max=0))
+        cfg["raw_max_x"], cfg["raw_max_y"] = 1349, 1079
+
+        self.assertEqual((675, 540), multi_touch.to_raw(675, 540, cfg, SCREEN))
+        self.assertEqual((0, 0), multi_touch.to_raw(0, 0, cfg, SCREEN))
+        self.assertEqual((1349, 1079),
+                         multi_touch.to_raw(1349, 1079, cfg, SCREEN))
+        # The bottom of the playfield must NOT collapse onto the edge.
+        self.assertEqual(900, multi_touch.to_raw(675, 900, cfg, SCREEN)[1])
+
+    def test_swap_takes_the_ceiling_of_the_axis_it_lands_on(self):
+        """After a swap, u is bound for ABS_MT_POSITION_X and must use the
+        X ceiling — not the ceiling of the axis it came from."""
+        cfg = multi_touch._cfg(_cfg(raw_max=0, swap_xy=True))
+        cfg["raw_max_x"], cfg["raw_max_y"] = 1349, 1079
+        # y=1079 is the full extent of the screen height -> u = 1.0 -> max X
+        self.assertEqual((1349, 0), multi_touch.to_raw(0, 1079, cfg, SCREEN))
+
     def test_out_of_range_points_are_clamped_not_wrapped(self):
         """A raw value past the driver's max is rejected by the driver, so
         an off-screen point must land at the edge instead of vanishing."""
@@ -169,18 +195,36 @@ add device 3: /dev/input/event7
         _reset_probes()
         self.addCleanup(_reset_probes)
 
+    # LDPlayer: the driver grid IS the pixel grid, and the two axes differ.
+    # Reading only the X ceiling and reusing it for Y stretched every drop
+    # 1349/1079 = 1.25x downward.
+    RECTANGULAR = b"""add device 3: /dev/input/event2
+  name:     "input"
+    ABS (0003):
+      ABS_MT_SLOT           : value 0, min 0, max 15, fuzz 0, flat 0
+      ABS_MT_POSITION_X     : value 0, min 0, max 1349, fuzz 0, flat 0
+      ABS_MT_POSITION_Y     : value 0, min 0, max 1079, fuzz 0, flat 0
+"""
+
     def test_picks_the_node_that_reports_touch_coordinates(self):
         cfg = multi_touch._cfg({"multi_touch": {"event_device": "auto"}})
         done = mock.Mock(stdout=self.GETEVENT, stderr=b"", returncode=0)
         with mock.patch.object(multi_touch, "_run", return_value=done):
-            self.assertEqual(("/dev/input/event7", 32767),
+            self.assertEqual(("/dev/input/event7", 32767, 32767),
+                             multi_touch.touch_device(cfg, refresh=True))
+
+    def test_each_axis_keeps_its_own_ceiling(self):
+        cfg = multi_touch._cfg({"multi_touch": {"event_device": "auto"}})
+        done = mock.Mock(stdout=self.RECTANGULAR, stderr=b"", returncode=0)
+        with mock.patch.object(multi_touch, "_run", return_value=done):
+            self.assertEqual(("/dev/input/event2", 1349, 1079),
                              multi_touch.touch_device(cfg, refresh=True))
 
     def test_a_pinned_device_is_used_as_given(self):
         cfg = multi_touch._cfg({"multi_touch": {
             "event_device": "/dev/input/event9", "raw_max": 4095}})
         with mock.patch.object(multi_touch, "_run") as run:
-            self.assertEqual(("/dev/input/event9", 4095),
+            self.assertEqual(("/dev/input/event9", 4095, 4095),
                              multi_touch.touch_device(cfg))
         run.assert_not_called()
 

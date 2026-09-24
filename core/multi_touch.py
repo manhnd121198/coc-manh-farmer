@@ -96,7 +96,12 @@ def _cfg(config: dict | None) -> dict:
     block = (config or {}).get("multi_touch", {})
     return {
         "device":   str(block.get("event_device", "auto")).strip() or "auto",
+        # A single override for both axes, kept for existing configs.
+        # touch_device fills raw_max_x/raw_max_y from the driver when this
+        # is 0, which is the only way the two can differ.
         "raw_max":  int(block.get("raw_max", 0)),
+        "raw_max_x": int(block.get("raw_max", 0)),
+        "raw_max_y": int(block.get("raw_max", 0)),
         "swap_xy":  bool(block.get("swap_xy", False)),
         "invert_x": bool(block.get("invert_x", False)),
         "invert_y": bool(block.get("invert_y", False)),
@@ -163,17 +168,26 @@ def last_root_attempts() -> str:
     return _last_attempts
 
 
-def touch_device(cfg: dict, refresh: bool = False) -> tuple[str, int] | None:
-    """The touchscreen event node and its ABS_MT_POSITION_X ceiling.
+def touch_device(cfg: dict, refresh: bool = False) -> tuple[str, int, int] | None:
+    """The touchscreen event node and its ABS_MT_POSITION_X/Y ceilings.
 
     Auto-detected unless pinned in config, because the node number is not
     portable: it was event9 on the reference phone and is routinely
     something else on an emulator. Picking the wrong one means writing to
     a keyboard or a sensor — accepted without error, and nothing happens.
+
+    BOTH ceilings are read, because they are not always equal. This
+    LDPlayer reports X 0..1349 and Y 0..1079 — its grid IS the pixel grid.
+    Scaling Y by the X ceiling, as this function used to make callers do,
+    stretched every Y by 1349/1079 = 1.25x: a drop meant for the middle of
+    the base landed 136px low, and anything below y~863 was clamped flat
+    onto the bottom edge, i.e. into the troop card bar. Nothing errors —
+    the driver simply accepts the out-of-range value.
     """
     global _detected
     if cfg["device"] != "auto":
-        return cfg["device"], max(1, cfg["raw_max"] or 4095)
+        pinned = max(1, cfg["raw_max"] or 4095)
+        return cfg["device"], pinned, pinned
     if _detected is not None and not refresh:
         return _detected
     try:
@@ -186,29 +200,46 @@ def touch_device(cfg: dict, refresh: bool = False) -> tuple[str, int] | None:
         log.error("Multi-touch: could not list input devices: %s", exc)
         return None
 
-    node, best = None, None
+    def _ceiling(line: str) -> int:
+        # "... : value 0, min 0, max 4095, fuzz 0, ..."
+        for part in line.split(","):
+            if "max" in part:
+                try:
+                    return int(part.strip().split()[-1])
+                except ValueError:
+                    return 0
+        return 0
+
+    node, node_x, max_x, max_y = None, None, 0, 0
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("add device"):
+            if max_x > 0:
+                break                       # first multitouch node wins
             node = stripped.rsplit(" ", 1)[-1]
         elif "ABS_MT_POSITION_X" in stripped and node:
-            # "... : value 0, min 0, max 4095, fuzz 0, ..."
-            top = 0
-            for part in stripped.split(","):
-                if "max" in part:
-                    try:
-                        top = int(part.strip().split()[-1])
-                    except ValueError:
-                        top = 0
-                    break
+            top = _ceiling(stripped)
             if top > 0:
-                best = (node, top)
-                break                       # first multitouch node wins
-    if best is None:
+                node_x, max_x = node, top
+        elif "ABS_MT_POSITION_Y" in stripped and node == node_x:
+            max_y = _ceiling(stripped)
+
+    if not max_x:
         log.error("Multi-touch: no input device reports ABS_MT_POSITION_X.")
         return None
-    _detected = (best[0], cfg["raw_max"] or best[1])
-    log.info("Multi-touch: using %s, coordinates 0..%d", *_detected)
+    if not max_y:
+        # A node that reports X but not Y is malformed; squaring the grid
+        # is the old behaviour and no worse than refusing to run.
+        log.warning(
+            "Multi-touch: %s reports no ABS_MT_POSITION_Y — assuming the "
+            "Y axis matches X (0..%d). Drops may land off vertically.",
+            node_x, max_x,
+        )
+        max_y = max_x
+
+    override = cfg["raw_max"]
+    _detected = (node_x, override or max_x, override or max_y)
+    log.info("Multi-touch: using %s, X 0..%d, Y 0..%d", *_detected)
     return _detected
 
 
@@ -218,7 +249,14 @@ def available(config: dict | None = None) -> bool:
 
 
 def to_raw(x: int, y: int, cfg: dict, screen: tuple[int, int] | None = None) -> Point:
-    """Screen pixel -> driver grid, honouring the configured orientation."""
+    """Screen pixel -> driver grid, honouring the configured orientation.
+
+    Each axis is scaled by ITS OWN ceiling. They are equal on the phones
+    this was written against (4095x4095, 32767x32767) but not on every
+    device — see touch_device for what a shared ceiling did on LDPlayer.
+    The swap happens before scaling, so ``u`` is always the value bound
+    for ABS_MT_POSITION_X and takes the X ceiling.
+    """
     width, height = screen or get_active_resolution()
     u = x / float(max(1, width - 1))
     v = y / float(max(1, height - 1))
@@ -228,9 +266,11 @@ def to_raw(x: int, y: int, cfg: dict, screen: tuple[int, int] | None = None) -> 
         u = 1.0 - u
     if cfg["invert_y"]:
         v = 1.0 - v
-    top = cfg["raw_max"] or 4095
-    clamp = lambda t: int(round(min(1.0, max(0.0, t)) * top))   # noqa: E731
-    return clamp(u), clamp(v)
+    fallback = cfg["raw_max"] or 4095
+    top_x = cfg.get("raw_max_x") or fallback
+    top_y = cfg.get("raw_max_y") or fallback
+    clamp = lambda t, top: int(round(min(1.0, max(0.0, t)) * top))   # noqa: E731
+    return clamp(u, top_x), clamp(v, top_y)
 
 
 def _events(points: Sequence[Point], cfg: dict, screen=None) -> tuple[list[str], list[str]]:
@@ -281,7 +321,7 @@ def hold_all(
     resolved = touch_device(cfg)
     if resolved is None:
         return False
-    cfg["device"], cfg["raw_max"] = resolved
+    cfg["device"], cfg["raw_max_x"], cfg["raw_max_y"] = resolved
     if len(points) > MAX_SLOTS:
         log.warning(
             "Multi-touch asked for %d fingers, driver has %d slots — "
