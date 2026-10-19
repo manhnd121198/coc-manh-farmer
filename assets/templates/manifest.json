@@ -148,8 +148,8 @@
     "category": "ui_elements",
     "label": "Timer Top Start",
     "file": "assets\\templates\\ui_elements\\timer_top_start.png",
-    "width": 248,
-    "height": 28,
+    "width": 252,
+    "height": 30,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -321,8 +321,10 @@
     "category": "heroes",
     "label": "Royal Champion",
     "file": "assets\\templates\\heroes\\royal_champion.png",
-    "width": 166,
-    "height": 217
+    "width": 52,
+    "height": 52,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "ranked_mode_btn": {
     "category": "ui_elements",
@@ -337,8 +339,8 @@
     "category": "ui_elements",
     "label": "Surrender Button",
     "file": "assets\\templates\\ui_elements\\surrender_button.png",
-    "width": 178,
-    "height": 54,
+    "width": 171,
+    "height": 50,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -405,6 +407,33 @@
     "file": "assets\\templates\\builder_base\\bb_side_label.png",
     "width": 146,
     "height": 26,
+    "screen_w": 1350,
+    "screen_h": 1080
+  },
+  "abcdaa": {
+    "category": "ui_elements",
+    "label": "Abcdaa",
+    "file": "assets\\templates\\ui_elements\\abcdaa.png",
+    "width": 1098,
+    "height": 456,
+    "screen_w": 1350,
+    "screen_h": 1080
+  },
+  "reward_prompt_card": {
+    "category": "ui_elements",
+    "label": "Reward Prompt Card",
+    "file": "assets\\templates\\ui_elements\\reward_prompt_card.png",
+    "width": 299,
+    "height": 55,
+    "screen_w": 1350,
+    "screen_h": 1080
+  },
+  "battle_speed_1x": {
+    "category": "ui_elements",
+    "label": "Battle Speed 1X",
+    "file": "assets\\templates\\ui_elements\\battle_speed_1x.png",
+    "width": 91,
+    "height": 94,
     "screen_w": 1350,
     "screen_h": 1080
   }

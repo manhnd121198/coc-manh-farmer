@@ -21,6 +21,7 @@ from core.settings import Settings
 from vision.screen_reader import ScreenReader
 from vision.ocr_reader import OCRReader
 from logic import fast_entry
+from logic.reward_picker import RewardPicker
 from logic.smart_v2_logic import SmartV2Logic
 from logic.wall_upgrader import WallUpgrader
 
@@ -43,6 +44,11 @@ class HomeVillageLogic:
         self._attack_active = False
         self._battle_phase_done = False
         self._engine = None
+        self._reward_picker = RewardPicker(sr)
+
+        # Consecutive frames the battle-speed button has been showing 1x.
+        # Drives a single tap per appearance, with a retry if it sticks.
+        self._speed_button_ticks: int = 0
         
         self._hero_memory: list[tuple[str, int, int]] = []
         self._post_deploy_time: float = 0.0
@@ -76,6 +82,11 @@ class HomeVillageLogic:
     def _count_attack(self) -> None:
         """Tally one battle. Every path that arms ``_attack_active`` goes
         through here so Normal, Ranked and loot-skip all count alike."""
+        # The reward prompts are counted per battle, and this is the one
+        # place every entry into a battle passes through. The speed button
+        # is per battle too — it comes back at 1x on the next attack.
+        self._reward_picker.reset()
+        self._speed_button_ticks = 0
         if self._engine is not None:
             self._engine.record_attack()
 
@@ -153,6 +164,24 @@ class HomeVillageLogic:
             self._was_home = True
         else:
             self._was_home = False
+
+        # ── Reward prompt ──────────────────────────────────────────────
+        # Answered before the state is acted on. The prompt covers whatever
+        # is behind it, so while it is up a deploy would land on the panel
+        # and the retreat checks would be reading it instead of the base.
+        #
+        # It has to sit in FRONT of the dispatch because the third prompt
+        # arrives at 100% on top of the victory screen, hiding "Return
+        # Home" and leaving detect_state with nothing it recognises —
+        # measured as UNKNOWN, which the dispatch below ignores entirely.
+        #
+        # The home village and the scouting screen are the two states that
+        # cannot be inside a battle, and they are skipped: a false match
+        # there would otherwise swallow every tick and stall the bot on its
+        # own village, which is a far worse failure than missing a prompt.
+        if state not in (GameState.HOME, GameState.OPPONENT_FOUND):
+            if self._reward_picker.check(screenshot):
+                return
 
         if state == GameState.HOME:
             self._handle_home(screenshot)
@@ -296,7 +325,37 @@ class HomeVillageLogic:
         self._attack_active = True
         self._battle_phase_done = False
 
+    # The game offers to run the battle faster, but only once a minute is
+    # left on the clock. One tap is all it takes, and the template matches
+    # the 1x face alone, so once the speed has changed there is nothing
+    # left to match and the taps stop on their own.
+    SPEED_RETRY_EVERY_TICKS = 4
+
+    def _speed_up_battle(self, screenshot: np.ndarray) -> bool:
+        """Tap the battle-speed button if it is offering 1x. True if tapped."""
+        found = self._sr.find_template_by_name(screenshot, "battle_speed_1x")
+        if found is None:
+            self._speed_button_ticks = 0
+            return False
+
+        self._speed_button_ticks += 1
+        first_frame = self._speed_button_ticks == 1
+        if not first_frame and self._speed_button_ticks % self.SPEED_RETRY_EVERY_TICKS:
+            # Already tapped; the button is mid-animation or the tap missed.
+            return False
+
+        log.info(
+            "%sSpeeding the battle up — tapping 1x at (%d,%d).%s",
+            C_GREEN, found[0], found[1], C_RESET,
+        )
+        tap(found[0], found[1])
+        return True
+
     def _handle_in_battle(self, screenshot: np.ndarray):
+        # Unlike the reward prompt this does not cover anything, so the
+        # attack carries on in the same tick rather than returning here.
+        self._speed_up_battle(screenshot)
+
         # ── RANKED-ONLY auto-activation ────────────────────────────────
         # If the attack isn't active yet but we are already IN_BATTLE,
         # this can only happen in Ranked (Normal always passes through
