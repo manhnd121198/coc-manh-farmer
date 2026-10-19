@@ -3,8 +3,8 @@
     "category": "ui_elements",
     "label": "Ok Button",
     "file": "assets\\templates\\ui_elements\\ok_button.png",
-    "width": 173,
-    "height": 72,
+    "width": 256,
+    "height": 96,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -12,8 +12,8 @@
     "category": "ui_elements",
     "label": "Normal Mode Btn",
     "file": "assets\\templates\\ui_elements\\normal_mode_btn.png",
-    "width": 224,
-    "height": 44,
+    "width": 340,
+    "height": 51,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -36,7 +36,7 @@
     "category": "ui_elements",
     "label": "Attack Button2",
     "file": "assets\\templates\\ui_elements\\attack_button2.png",
-    "width": 236,
+    "width": 340,
     "height": 51,
     "screen_w": 1350,
     "screen_h": 1080
@@ -52,8 +52,8 @@
     "category": "ui_elements",
     "label": "Attack Button",
     "file": "assets\\templates\\ui_elements\\attack_button.png",
-    "width": 154,
-    "height": 48,
+    "width": 152,
+    "height": 143,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -61,8 +61,8 @@
     "category": "ui_elements",
     "label": "End Battle Button",
     "file": "assets\\templates\\ui_elements\\end_battle_button.png",
-    "width": 178,
-    "height": 58,
+    "width": 171,
+    "height": 53,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -70,8 +70,8 @@
     "category": "ui_elements",
     "label": "End Battle Confirm",
     "file": "assets\\templates\\ui_elements\\end_battle_confirm.png",
-    "width": 286,
-    "height": 126,
+    "width": 280,
+    "height": 116,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -79,8 +79,8 @@
     "category": "ui_elements",
     "label": "Return Home",
     "file": "assets\\templates\\ui_elements\\return_home.png",
-    "width": 228,
-    "height": 96,
+    "width": 227,
+    "height": 94,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -139,7 +139,7 @@
     "category": "ui_elements",
     "label": "Lot Asseset",
     "file": "assets\\templates\\ui_elements\\lot_asseset.png",
-    "width": 198,
+    "width": 208,
     "height": 24,
     "screen_w": 1350,
     "screen_h": 1080
@@ -158,8 +158,9 @@
     "label": "Troops Bar",
     "file": "assets\\templates\\ui_elements\\troops_bar.png",
     "width": 1350,
-    "height": 129,
-    "screen_w": 1350
+    "height": 99,
+    "screen_w": 1350,
+    "screen_h": 1080
   },
   "reload_button": {
     "category": "ui_elements",
@@ -327,8 +328,8 @@
     "category": "ui_elements",
     "label": "Ranked Mode Btn",
     "file": "assets\\templates\\ui_elements\\ranked_mode_btn.png",
-    "width": 360,
-    "height": 160,
+    "width": 345,
+    "height": 50,
     "screen_w": 1350,
     "screen_h": 1080
   },
@@ -368,8 +369,8 @@
     "category": "troops",
     "label": "Baba",
     "file": "assets\\templates\\troops\\baba.png",
-    "width": 93,
-    "height": 114,
+    "width": 55,
+    "height": 66,
     "screen_w": 1350,
     "screen_h": 1080
   },

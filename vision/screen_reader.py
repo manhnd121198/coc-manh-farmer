@@ -89,6 +89,20 @@ def _get_troops_bar_size() -> tuple[int, int] | None:
     return None
 
 
+# CoC draws Ok, the end-battle confirm and "Return Home" as one green
+# rounded button with different text, and matching is done on grayscale, so
+# the text is nearly all that separates them. Measured across the home
+# village, the attack menu, the single-player map, a battle and the victory
+# screen, a genuine match scores 1.00 while the worst cross-match between
+# them reaches 0.78 — above the 0.70 UI threshold. These two are the pair
+# that actually gets tapped (ok_button sits at the top of the action-chain
+# priority), so they are judged strictly enough to clear that noise floor.
+_CONFIRM_THRESHOLDS: dict[str, float] = {
+    "ok_button": 0.88,
+    "end_battle_confirm": 0.88,
+}
+
+
 class ScreenReader:
     _template_cache: dict[str, tuple[np.ndarray, np.ndarray | None, str, float | None]] = {}
 
@@ -648,7 +662,9 @@ class ScreenReader:
         ]
         found = []
         for name in names:
-            loc = self.find_template_by_name(screenshot, name)
+            loc = self.find_template_by_name(
+                screenshot, name, _CONFIRM_THRESHOLDS.get(name),
+            )
             if loc:
                 found.append((name, loc[0], loc[1], 1.0))
         return found
@@ -716,10 +732,18 @@ class ScreenReader:
                 return GameState.BB_BATTLE
 
         # ── HOME VILLAGE STATE PRIORITY ────────────────────────────────
+        # Ok, the end-battle confirm and "Return Home" are the same green
+        # button art with different text, and matching runs on grayscale, so
+        # on the victory screen the first two score ~0.72 against the real
+        # Return Home's 1.00. Asked in the other order, a noise match beats
+        # the genuine one and the bot taps empty ground until the chain gives
+        # up. Only a near-perfect score short-circuits here; anything lower
+        # still falls through to the sweep, which catches a modal drawn over
+        # the result screen (there Return Home sits at 0.64).
+        if f(screenshot, "return_home", 0.90):       return GameState.BATTLE_ENDED
+
         confirmations = self.scan_for_confirmations(screenshot)
         if confirmations: return GameState.CONFIRMING
-
-        if f(screenshot, "return_home"):             return GameState.BATTLE_ENDED
         if f(screenshot, "searching_indicator"):     return GameState.SEARCHING
 
         # Multi-heuristic Home Village detection (scenery-immune & tablet-adaptive)
