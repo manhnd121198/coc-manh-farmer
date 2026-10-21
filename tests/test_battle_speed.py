@@ -1,11 +1,9 @@
 """Tests for the battle speed-up tap.
 
-The game puts up a speed button once a minute is left on the battle clock.
-One tap is all that is wanted. The template matches only the 1x face, so
-after the speed changes there is nothing left to match — but the button
-still shows 1x for a few frames while it animates, and the battle loop
-sees every one of those, so the tap has to be driven by the button
-appearing rather than by it being on screen.
+The game puts up a speed button once a minute is left on the battle clock,
+and it gets exactly one tap. The button goes on showing 1x for a few frames
+while it animates, and the battle loop sees every one of those, so the tap
+is driven by the button appearing rather than by it being on screen.
 """
 
 import unittest
@@ -44,23 +42,15 @@ class BattleSpeedTest(unittest.TestCase):
             self.assertTrue(self.logic._speed_up_battle(self.frame))
         tap.assert_called_once_with(1289, 714)
 
-    def test_does_not_tap_again_while_the_button_animates(self):
-        """The button keeps showing 1x for a few frames after the tap. Tapping
-        each of those could cycle the speed past what was asked for."""
+    def test_never_taps_twice_however_long_the_button_stays_up(self):
+        """The button keeps showing 1x for a few frames after the tap, and a
+        battle can leave it on screen for its whole last minute. Tapping any
+        of those frames would push the speed past what was asked for."""
         self.reader.visible = True
         with mock.patch("logic.home_village.tap") as tap:
-            for _ in range(3):
+            for _ in range(60):
                 self.logic._speed_up_battle(self.frame)
         tap.assert_called_once()
-
-    def test_a_stuck_button_is_tapped_again(self):
-        """If the tap was swallowed the button stays at 1x, and the battle
-        would otherwise run out the clock at normal speed."""
-        self.reader.visible = True
-        with mock.patch("logic.home_village.tap") as tap:
-            for _ in range(HomeVillageLogic.SPEED_RETRY_EVERY_TICKS):
-                self.logic._speed_up_battle(self.frame)
-        self.assertEqual(2, tap.call_count)
 
     def test_nothing_happens_while_the_button_is_absent(self):
         with mock.patch("logic.home_village.tap") as tap:

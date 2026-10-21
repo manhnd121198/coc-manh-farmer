@@ -46,9 +46,9 @@ class HomeVillageLogic:
         self._engine = None
         self._reward_picker = RewardPicker(sr)
 
-        # Consecutive frames the battle-speed button has been showing 1x.
-        # Drives a single tap per appearance, with a retry if it sticks.
-        self._speed_button_ticks: int = 0
+        # Whether the battle-speed button was already on screen last tick,
+        # so that one appearance draws exactly one tap.
+        self._speed_button_seen: bool = False
         
         self._hero_memory: list[tuple[str, int, int]] = []
         self._post_deploy_time: float = 0.0
@@ -86,7 +86,7 @@ class HomeVillageLogic:
         # place every entry into a battle passes through. The speed button
         # is per battle too — it comes back at 1x on the next attack.
         self._reward_picker.reset()
-        self._speed_button_ticks = 0
+        self._speed_button_seen = False
         if self._engine is not None:
             self._engine.record_attack()
 
@@ -326,24 +326,20 @@ class HomeVillageLogic:
         self._battle_phase_done = False
 
     # The game offers to run the battle faster, but only once a minute is
-    # left on the clock. One tap is all it takes, and the template matches
-    # the 1x face alone, so once the speed has changed there is nothing
-    # left to match and the taps stop on their own.
-    SPEED_RETRY_EVERY_TICKS = 4
-
+    # left on the clock. Exactly one tap per appearance: the button goes on
+    # showing 1x for a few frames while it animates, and the battle loop
+    # sees every one of them, so tapping on anything but the first would
+    # push the speed past what was asked for.
     def _speed_up_battle(self, screenshot: np.ndarray) -> bool:
-        """Tap the battle-speed button if it is offering 1x. True if tapped."""
+        """Tap the battle-speed button the frame it appears. True if tapped."""
         found = self._sr.find_template_by_name(screenshot, "battle_speed_1x")
         if found is None:
-            self._speed_button_ticks = 0
+            self._speed_button_seen = False
+            return False
+        if self._speed_button_seen:
             return False
 
-        self._speed_button_ticks += 1
-        first_frame = self._speed_button_ticks == 1
-        if not first_frame and self._speed_button_ticks % self.SPEED_RETRY_EVERY_TICKS:
-            # Already tapped; the button is mid-animation or the tap missed.
-            return False
-
+        self._speed_button_seen = True
         log.info(
             "%sSpeeding the battle up — tapping 1x at (%d,%d).%s",
             C_GREEN, found[0], found[1], C_RESET,

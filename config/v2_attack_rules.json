@@ -64,7 +64,7 @@
     "hold_points": 4,
     "hold_points_by_troop": {
       "_default": 4,
-      "baba": 1,
+      "baba": 4,
       "valkyrie": 2,
       "dragon": 1
     },
@@ -79,7 +79,7 @@
       ],
       "baba": [
         2000,
-        2100
+        2500
       ],
       "valkyrie": [
         1000,

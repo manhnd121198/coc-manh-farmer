@@ -18,7 +18,6 @@
   "attack_strategy": "smart_target",
   "macro_file": "recordings\\hv_attack_macro.json",
   "selected_troops": [
-    "dragon",
     "baba"
   ],
   "selected_heroes": [
