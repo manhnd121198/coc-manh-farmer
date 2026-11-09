@@ -2,7 +2,7 @@
   "min_gold": 0,
   "min_elixir": 0,
   "min_dark_elixir": 0,
-  "hv_random_skip_enabled": true,
+  "hv_random_skip_enabled": false,
   "hv_random_skip_chance": 0,
   "hv_random_skip_min": 1,
   "hv_random_skip_max": 2,
@@ -20,12 +20,7 @@
   "selected_troops": [
     "baba"
   ],
-  "selected_heroes": [
-    "archer_queen",
-    "barbarian_king",
-    "grand_warden",
-    "royal_champion"
-  ],
+  "selected_heroes": [],
   "selected_spells": [],
   "bb_attack_mode": "t\u1eadp luy\u1ec7n",
   "bb_attack_strategy": "smart_target",

@@ -23,7 +23,10 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from core.adb_handler import get_active_resolution, tap
+import cv2
+import numpy as np
+
+from core.adb_handler import get_active_resolution, screencap, tap
 from core.logger import BotLogger
 from core.settings import Settings
 
@@ -101,3 +104,34 @@ def run(interrupted: Callable[[], bool] | None = None) -> bool:
         tap(x, y)
         time.sleep(settle)
     return True
+
+
+ATTACK_BUTTON_BOX = (22, 1008, 175, 1053)
+
+
+def attack_button_ready(screenshot) -> bool:
+    x0, y0, x1, y1 = ATTACK_BUTTON_BOX
+    roi = screenshot[y0:y1, x0:x1]
+    if roi.size == 0:
+        return False
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    hue, sat, val = np.median(hsv, axis=0)
+    return 12 <= hue <= 32 and sat > 100 and val > 150
+
+
+def wait_for_attack_button(
+    interrupted: Callable[[], bool] | None = None,
+    timeout_sec: float = 6.0,
+    poll_sec: float = 0.2,
+) -> bool:
+    started = time.time()
+    while time.time() - started < timeout_sec:
+        if interrupted is not None and interrupted():
+            return False
+        shot = screencap()
+        if shot is not None and attack_button_ready(shot):
+            log.info("Attack button visible after %.1fs.", time.time() - started)
+            return True
+        time.sleep(poll_sec)
+    log.info("Attack button not visible after %.0fs — leaving it to the next tick.", timeout_sec)
+    return False

@@ -74,8 +74,8 @@
     "min_gap_ratio": 0.5,
     "hold_ms_by_troop": {
       "_default": [
-        2000,
-        2100
+        2500,
+        3000
       ],
       "baba": [
         2000,
@@ -86,6 +86,20 @@
         2000
       ]
     }
+  },
+  "fixed_ring": {
+    "_comment": "Không dò vùng đỏ: chọn thẻ lính rồi chạm lần lượt từng điểm trong route, mỗi lần chạm thả 1 con. Route ghi tay trên BlueStacks 1350x1080 (màn tấn công mở sẵn ở mức thu nhỏ tối đa), đi ngược chiều kim đồng hồ từ đỉnh trên. reference_size là độ phân giải lúc ghi -- máy khác cùng tỉ lệ khung thì tự co giãn, khác tỉ lệ thì phải ghi lại. jitter_px: mỗi lần chạm lệch ngẫu nhiên tối đa ±N px mỗi trục. tap_gap_ms: nghỉ [min,max] ms sau mỗi lần chạm. Thẻ hết lính giữa chừng thì các lần chạm còn lại không thả gì.",
+    "reference_size": [1350, 1080],
+    "jitter_px": 10,
+    "tap_gap_ms": [80, 150],
+    "route": [
+      [659, 55], [583, 116], [469, 157], [394, 249], [265, 310],
+      [200, 400], [87, 487], [157, 597], [287, 640], [269, 685],
+      [374, 766], [476, 831], [596, 899], [763, 969], [910, 870],
+      [1033, 786], [1137, 694], [1237, 618], [1315, 498], [1198, 401],
+      [1096, 317], [945, 233], [861, 155], [1001, 236], [1048, 291],
+      [1156, 372]
+    ]
   },
   "hero_ability": {
     "_comment": "trigger_after_engagement_sec là khoảng chờ sau khi quân đã xuống rồi mới double-tap thẻ hero để kích kỹ năng. Ghi [min,max] giây, roll lại mỗi trận nên không trận nào kích đúng cùng một nhịp; ghi một số trần vẫn chạy và hiểu là chờ cố định. Đặt thành \"auto\" (hoặc null) thì bot không bấm thẻ nữa -- game sẽ tự phát kỹ năng lúc hero sắp hết máu, muộn hơn bấm tay nhưng là nhịp của chính con hero và không phí kỹ năng lên con hero còn đầy máu. Khoảng chờ thì vẫn diễn ra ở cả hai trường hợp: spell thả sau đó cần quân đã giao chiến rồi, nên để \"auto\" thì nó rơi về dải mặc định 3-5s. double_tap_gap_ms là khoảng cách giữa hai cái tap -- nhanh quá thì game đọc thành một tap, chậm quá thì đọc thành hai lần chọn thẻ. File này phải lưu bằng UTF-8.",
@@ -127,6 +141,7 @@
     "air_attack",
     "ground_funnel",
     "ring_sweep",
+    "fixed_ring",
     "perimeter_sweep",
     "smart_default"
   ],

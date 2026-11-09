@@ -34,6 +34,7 @@ from logic.rules import (
     AirAttackRule,
     AttackContext,
     AttackRule,
+    FixedRingRule,
     GroundFunnelRule,
     PerimeterSweepRule,
     RingSweepRule,
@@ -176,16 +177,6 @@ class V2Orchestrator:
                 screenshot = ss2
 
         ui_cutoff = self._sr.get_ui_cutoff(screenshot.shape[0])
-        polygon = self._skills.red_zone.detect(
-            screenshot, ui_cutoff, self._config.attack_rules,
-        )
-        if polygon is None:
-            log.warning(
-                "V2 polygon detection FAILED (HSV + inversion both rejected) "
-                "— V2 gives up on this base.",
-            )
-            return False
-        base_centroid = self._skills.red_zone.centroid(polygon)
 
         rule = self._select_rule(
             v2_mode=v2_mode,
@@ -198,6 +189,20 @@ class V2Orchestrator:
         if rule is None:
             log.warning("V2 no rule matched — V2 gives up on this base.")
             return False
+
+        polygon = None
+        base_centroid = None
+        if getattr(rule, "needs_polygon", True):
+            polygon = self._skills.red_zone.detect(
+                screenshot, ui_cutoff, self._config.attack_rules,
+            )
+            if polygon is None:
+                log.warning(
+                    "V2 polygon detection FAILED (HSV + inversion both rejected) "
+                    "— V2 gives up on this base.",
+                )
+                return False
+            base_centroid = self._skills.red_zone.centroid(polygon)
 
         ctx = AttackContext(
             screenshot=screenshot,
@@ -226,7 +231,7 @@ class V2Orchestrator:
             # try SmartDefault before bailing to V36. ResourceRaid already
             # chains internally; this catches Air/Funnel/THSnipe falling
             # short (e.g. target not found).
-            if not isinstance(rule, SmartDefaultRule):
+            if polygon is not None and not isinstance(rule, SmartDefaultRule):
                 fallback = self._find(SmartDefaultRule)
                 if fallback is not None and fallback is not rule:
                     log.info("V2 rule '%s' returned False — chaining to SmartDefault.", rule.name)
@@ -376,6 +381,7 @@ class V2Orchestrator:
             GroundFunnelRule(),
             PerimeterSweepRule(),
             RingSweepRule(),
+            FixedRingRule(),
             SmartDefaultRule(),
         ]
         rules.sort(key=lambda r: r.priority)

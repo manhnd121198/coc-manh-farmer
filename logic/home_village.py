@@ -159,7 +159,7 @@ class HomeVillageLogic:
 
     def handle(self, screenshot: np.ndarray, state: GameState):
         if state == GameState.HOME:
-            if not self._was_home:
+            if not self._was_home and bool(Settings().get("wall_upgrade_enabled", False)):
                 self._log_own_storage(screenshot)
             self._was_home = True
         else:
@@ -408,7 +408,18 @@ class HomeVillageLogic:
         self._battle_phase_done = False
         self._hero_memory.clear()
         m = self._sr.find_template_by_name(screenshot, "return_home")
-        if m: tap(m[0], m[1])
+        if not m:
+            return
+        tap(m[0], m[1])
+        if self._can_chain_entry() and fast_entry.wait_for_attack_button(self._is_interrupted):
+            fast_entry.run(self._is_interrupted)
+
+    def _can_chain_entry(self) -> bool:
+        if self._profile.get("hv_entry_sequence"):
+            return False
+        if self._engine is not None and self._engine._session.due():
+            return False
+        return fast_entry.is_available()
 
     # ═══════════════════════════════════════════════════════════════════
     #  V36 VITALITY SENSOR & TACTICAL RETREAT

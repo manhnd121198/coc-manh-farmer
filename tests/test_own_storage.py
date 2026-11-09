@@ -51,6 +51,13 @@ class StorageOnEntryTest(unittest.TestCase):
         self.consider = consider.start()
         self.addCleanup(consider.stop)
 
+        self.settings = {"wall_upgrade_enabled": True}
+        settings = mock.patch("logic.home_village.Settings")
+        settings.start().return_value.get.side_effect = (
+            lambda key, default=None: self.settings.get(key, default)
+        )
+        self.addCleanup(settings.stop)
+
     def _handle(self, *states):
         for s in states:
             self.logic.handle(self.frame, s)
@@ -67,6 +74,11 @@ class StorageOnEntryTest(unittest.TestCase):
     def test_reads_again_after_leaving_and_coming_back(self):
         self._handle(GameState.HOME, GameState.IN_BATTLE, GameState.HOME)
         self.assertEqual(2, self.ocr.read_own_storage.call_count)
+
+    def test_skips_the_read_when_wall_upgrade_is_off(self):
+        self.settings["wall_upgrade_enabled"] = False
+        self._handle(GameState.HOME, GameState.IN_BATTLE, GameState.HOME)
+        self.ocr.read_own_storage.assert_not_called()
 
     def test_never_reads_outside_the_village(self):
         self._handle(GameState.IN_BATTLE, GameState.OPPONENT_FOUND,
